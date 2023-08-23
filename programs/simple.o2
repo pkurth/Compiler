@@ -1,0 +1,6 @@
+int var = 13;
+// This is a comment.
+int x = 2; // End of line comment.
+int y = var;
+
+return y;
