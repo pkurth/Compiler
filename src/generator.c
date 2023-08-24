@@ -2,19 +2,20 @@
 
 #include <assert.h>
 
+
 struct StackVariable
 {
 	String name;
-	size_t stack_location;
+	u64 stack_location;
 };
 typedef struct StackVariable StackVariable;
 
 struct Stack
 {
-	size_t stack_ptr;
+	u64 stack_ptr;
 
 	StackVariable variables[128];
-	size_t variable_count;
+	u64 variable_count;
 };
 typedef struct Stack Stack;
 
@@ -33,7 +34,7 @@ static void stack_pop(Stack* stack, const char* reg, String* assembly)
 static StackVariable* stack_find_variable(Stack* stack, String variable)
 {
 	StackVariable* result = 0;
-	for (size_t i = 0; i < stack->variable_count; ++i)
+	for (u64 i = 0; i < stack->variable_count; ++i)
 	{
 		if (string_equal(stack->variables[i].name, variable))
 		{
@@ -48,7 +49,7 @@ static void register_load_literal(String literal, const char* reg, String* assem
 	string_push(assembly,
 		"mov %s, %.*s\n",
 		reg,
-		(int)literal.len, literal.str
+		(i32)literal.len, literal.str
 	);
 }
 
@@ -68,11 +69,11 @@ static void generate_expression(Program* program, Expression expression, Stack* 
 		StackVariable* variable = stack_find_variable(stack, expression.identifier.str);
 		if (!variable)
 		{
-			fprintf(stderr, "Undeclared identifier '%.*s' (line %d)\n", (int)expression.identifier.str.len, expression.identifier.str.str, (int)expression.identifier.line);
+			fprintf(stderr, "Undeclared identifier '%.*s' (line %d)\n", (i32)expression.identifier.str.len, expression.identifier.str.str, (i32)expression.identifier.line);
 		}
 		assert(variable);
 
-		int offset = (int)(stack->stack_ptr - variable->stack_location);
+		i32 offset = (i32)(stack->stack_ptr - variable->stack_location);
 
 		char from[32];
 		snprintf(from, sizeof(from), "[rsp+%d]", offset);
@@ -127,7 +128,7 @@ static void generate_statement(Program* program, Statement statement, Stack* sta
 
 String generate(Program program)
 {
-	size_t max_len = 1024 * 10;
+	u64 max_len = 1024 * 10;
 	String assembly = { malloc(max_len), 0 };
 	Stack stack = { 0 };
 
@@ -141,7 +142,7 @@ String generate(Program program)
 	);
 
 
-	for (size_t i = 0; i < program.statement_count; ++i)
+	for (u64 i = 0; i < program.statement_count; ++i)
 	{
 		Statement statement = program.statements[i];
 		generate_statement(&program, statement, &stack, &assembly);

@@ -2,6 +2,7 @@
 
 #include <assert.h>
 
+
 static void push_statement(Program* stream, Statement statement)
 {
 	if (stream->statement_count == stream->statement_capacity)
@@ -27,7 +28,7 @@ static ExpressionHandle push_expression(Program* stream, Expression expression)
 struct ParseContext
 {
 	TokenStream tokens;
-	size_t current_token;
+	u64 current_token;
 };
 typedef struct ParseContext ParseContext;
 
@@ -46,7 +47,7 @@ static Token context_consume(ParseContext* context)
 	return context->tokens.tokens[context->current_token++];
 }
 
-static ExpressionHandle parse_expression(ParseContext* context, Program* program, int min_precedence);
+static ExpressionHandle parse_expression(ParseContext* context, Program* program, i32 min_precedence);
 
 static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 {
@@ -78,7 +79,7 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 	return 0;
 }
 
-static ExpressionHandle parse_expression(ParseContext* context, Program* program, int min_precedence)
+static ExpressionHandle parse_expression(ParseContext* context, Program* program, i32 min_precedence)
 {
 	enum Associativity
 	{
@@ -87,11 +88,14 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 	};
 	typedef enum Associativity Associativity;
 
-	int operator_precedences[] =
+	i32 operator_precedences[] =
 	{
 		1, // ExpressionType_Addition
 		1, // ExpressionType_Subtraction
 	};
+
+
+	// https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing
 
 	ExpressionHandle lhs = parse_atom(context, program);
 
@@ -99,21 +103,21 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 	{
 		TokenType next_token_type = context_peek(context);
 
-		int is_binary_operator = next_token_type == TokenType_Plus || next_token_type == TokenType_Minus;
+		i32 is_binary_operator = next_token_type == TokenType_Plus || next_token_type == TokenType_Minus;
 		if (!is_binary_operator)
 		{
 			break;
 		}
 
 		ExpressionType type = (next_token_type == TokenType_Plus) ? ExpressionType_Addition : ExpressionType_Subtraction;
-		int precedence = operator_precedences[type - ExpressionType_Addition];
+		i32 precedence = operator_precedences[type - ExpressionType_Addition];
 		if (precedence < min_precedence)
 		{
 			break;
 		}
 
 		Associativity associativity = Associativity_Left;
-		int next_min_precedence = (associativity == Associativity_Left) ? (precedence + 1) : precedence;
+		i32 next_min_precedence = (associativity == Associativity_Left) ? (precedence + 1) : precedence;
 		
 		context_advance(context);
 
@@ -181,7 +185,7 @@ static Statement parse_statement(ParseContext* context, Program* program)
 	{
 		if (context_peek(context) != TokenType_EOF)
 		{
-			fprintf(stderr, "Error in line %d\n", (int)context->tokens.tokens[context->current_token].line);
+			fprintf(stderr, "Error in line %d\n", (i32)context->tokens.tokens[context->current_token].line);
 		}
 		else
 		{
@@ -234,61 +238,59 @@ void free_program(Program* program)
 	program->expression_count = 0;
 }
 
-static void print_expression(Program* program, Expression expression, int indent)
+static void print_expression(Program* program, ExpressionHandle expression_handle, i32 indent, i32* active_mask)
 {
-	for (int i = 0; i < indent; ++i)
+	for (i32 i = 0; i < indent; ++i)
 	{
-		printf((i == indent - 1) ? "|-> " : "|   ");
+		i32 last = (i == indent - 1);
+		i32 is_active = ((1 << i) & *active_mask);
+		printf((is_active || last) ? "|" : " ");
+		printf(last ? "-> " : "   ");
 	}
+
+	Expression expression = program_get_expression(program, expression_handle);
+
+	*active_mask |= (1 << indent);
 
 	if (expression.type == ExpressionType_IntLiteral)
 	{
-		printf("Integer literal: %.*s\n", (int)expression.int_literal.str.len, expression.int_literal.str.str);
+		printf("%.*s (%d)\n", (i32)expression.int_literal.str.len, expression.int_literal.str.str, (i32)expression_handle);
 	}
 	else if (expression.type == ExpressionType_Identifier)
 	{
-		printf("Identifier: %.*s\n", (int)expression.identifier.str.len, expression.identifier.str.str);
+		printf("%.*s (%d)\n", (i32)expression.identifier.str.len, expression.identifier.str.str, (i32)expression_handle);
 	}
-	else if (expression.type == ExpressionType_Addition)
+	else if (expression.type == ExpressionType_Addition || expression.type == ExpressionType_Subtraction)
 	{
-		printf("+\n");
+		printf("%s (%d)\n", expression.type == ExpressionType_Addition ? "+" : "-", (i32)expression_handle);
 
-		Expression lhs = program_get_expression(program, expression.binary.lhs);
-		Expression rhs = program_get_expression(program, expression.binary.rhs);
-		print_expression(program, lhs, indent + 1);
-		print_expression(program, rhs, indent + 1);
+		print_expression(program, expression.binary.lhs, indent + 1, active_mask);
+		*active_mask &= ~(1 << indent);
+		print_expression(program, expression.binary.rhs, indent + 1, active_mask);
 	}
-	else if (expression.type == ExpressionType_Subtraction)
-	{
-		printf("-\n");
 
-		Expression lhs = program_get_expression(program, expression.binary.lhs);
-		Expression rhs = program_get_expression(program, expression.binary.rhs);
-		print_expression(program, lhs, indent + 1);
-		print_expression(program, rhs, indent + 1);
-	}
+	*active_mask &= ~(1 << indent);
 }
 
-void print_program(Program program)
+void print_program(Program* program)
 {
-	for (size_t i = 0; i < program.statement_count; ++i)
+	for (u64 i = 0; i < program->statement_count; ++i)
 	{
-		Statement statement = program.statements[i];
+		Statement statement = program->statements[i];
+
+		i32 active_mask = 0;
 
 		if (statement.type == StatementType_VariableAssignment)
 		{
 			Token identifier = statement.variable_assignment.identifier;
-			Expression expression = program_get_expression(&program, statement.variable_assignment.expression);
 
-			printf("* Variable assignment %.*s\n", (int)identifier.str.len, identifier.str.str);
-			print_expression(&program, expression, 1);
+			printf("* Variable assignment %.*s\n", (i32)identifier.str.len, identifier.str.str);
+			print_expression(program, statement.variable_assignment.expression, 1, &active_mask);
 		}
 		else if (statement.type == StatementType_Return)
 		{
-			Expression expression = program_get_expression(&program, statement.ret.expression);
-
 			printf("* Return\n");
-			print_expression(&program, expression, 1);
+			print_expression(program, statement.ret.expression, 1, &active_mask);
 		}
 	}
 }

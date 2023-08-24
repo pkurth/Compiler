@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-
 #include "lexer.h"
 #include "parser.h"
 #include "generator.h"
@@ -16,7 +13,7 @@ static String read_file(const char* filename)
 		return contents;
 	}
 	fseek(f, 0, SEEK_END);
-	size_t file_size = ftell(f);
+	u64 file_size = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
 	contents.str = malloc(file_size + 1);
@@ -44,12 +41,12 @@ static void write_file(const char* filename, String s)
 		return;
 	}
 
-	fprintf(f, "%.*s", (int)s.len, s.str);
+	fprintf(f, "%.*s", (i32)s.len, s.str);
 
 	fclose(f);
 }
 
-int main(int argc, char** argv)
+i32 main(i32 argc, char** argv)
 {
 	if (argc != 3)
 	{
@@ -62,10 +59,10 @@ int main(int argc, char** argv)
 	if (contents.len > 0)
 	{
 		TokenStream tokens = tokenize(contents);
-		//print_tokens(tokens);
+		//print_tokens(&tokens);
 
 		Program program = parse(tokens);
-		print_program(program);
+		print_program(&program);
 
 		String result = generate(program);
 

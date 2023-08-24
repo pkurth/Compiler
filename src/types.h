@@ -4,12 +4,27 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <inttypes.h>
+
+
+typedef int8_t i8;
+typedef int16_t i16;
+typedef int32_t i32;
+typedef int64_t i64;
+
+typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
+typedef float f32;
+typedef double f64;
 
 
 struct String
 {
 	char* str;
-	size_t len;
+	u64 len;
 };
 typedef struct String String;
 
@@ -22,12 +37,7 @@ static void free_string(String* s)
 	s->len = 0;
 }
 
-//static int string_cstr_equal(String s, const char* v)
-//{
-//	return strncmp(s.str, v, s.len) == 0;
-//}
-
-static int string_equal(String s1, String s2)
+static u32 string_equal(String s1, String s2)
 {
 	return s1.len == s2.len && strncmp(s1.str, s2.str, s1.len) == 0;
 }
@@ -105,7 +115,7 @@ struct Token
 {
 	TokenType type;
 	String str;
-	size_t line;
+	u64 line;
 };
 typedef struct Token Token;
 
@@ -113,8 +123,8 @@ typedef struct Token Token;
 struct TokenStream
 {
 	Token* tokens;
-	size_t count;
-	size_t capacity;
+	u64 count;
+	u64 capacity;
 };
 typedef struct TokenStream TokenStream;
 
@@ -128,7 +138,7 @@ typedef struct TokenStream TokenStream;
 
 
 
-typedef size_t ExpressionHandle;
+typedef u64 ExpressionHandle;
 
 enum ExpressionType
 {
@@ -198,12 +208,12 @@ typedef struct Statement Statement;
 struct Program
 {
 	Statement* statements;
-	size_t statement_count;
-	size_t statement_capacity;
+	u64 statement_count;
+	u64 statement_capacity;
 
 	Expression* expressions;
-	size_t expression_count;
-	size_t expression_capacity;
+	u64 expression_count;
+	u64 expression_capacity;
 };
 typedef struct Program Program;
 

@@ -52,9 +52,9 @@ TokenStream tokenize(String contents)
 
 	TokenStream stream = { 0 };
 
-	size_t line = 1;
+	u64 line = 1;
 
-	for (size_t i = 0; i < contents.len; ++i)
+	for (u64 i = 0; i < contents.len; ++i)
 	{
 		char c = contents.str[i];
 		if (c == '\n')
@@ -81,7 +81,7 @@ TokenStream tokenize(String contents)
 
 		if (isalpha(c) || c == '_')
 		{
-			for (size_t j = i + 1; j < contents.len && (isalnum(contents.str[j]) || contents.str[j] == '_'); ++j)
+			for (u64 j = i + 1; j < contents.len && (isalnum(contents.str[j]) || contents.str[j] == '_'); ++j)
 			{
 				++token.str.len;
 			}
@@ -113,7 +113,7 @@ TokenStream tokenize(String contents)
 		}
 		else if (isdigit(c))
 		{
-			for (size_t j = i + 1; j < contents.len && isdigit(contents.str[j]); ++j)
+			for (u64 j = i + 1; j < contents.len && isdigit(contents.str[j]); ++j)
 			{
 				++token.str.len;
 			}
@@ -140,7 +140,7 @@ void free_token_stream(TokenStream* tokens)
 	tokens->count = 0;
 }
 
-void print_tokens(TokenStream tokens)
+void print_tokens(TokenStream* tokens)
 {
 	const char token_type_to_character[] =
 	{
@@ -152,9 +152,9 @@ void print_tokens(TokenStream tokens)
 		"if", "while", "for", "return", "int",
 	};
 
-	for (size_t i = 0; i < tokens.count; ++i)
+	for (u64 i = 0; i < tokens->count; ++i)
 	{
-		Token token = tokens.tokens[i];
+		Token token = tokens->tokens[i];
 
 		if (token.type >= TokenType_ExclamationPoint && token.type <= TokenType_Tilde)
 		{
@@ -166,11 +166,11 @@ void print_tokens(TokenStream tokens)
 		}
 		else if (token.type == TokenType_Identifier)
 		{
-			printf("Identifier: %.*s\n", (int)token.str.len, token.str.str);
+			printf("Identifier: %.*s\n", (i32)token.str.len, token.str.str);
 		}
 		else if (token.type == TokenType_IntLiteral)
 		{
-			printf("Integer literal: %.*s\n", (int)token.str.len, token.str.str);
+			printf("Integer literal: %.*s\n", (i32)token.str.len, token.str.str);
 		}
 		else
 		{
