@@ -128,16 +128,26 @@ typedef struct TokenStream TokenStream;
 
 
 
-
-
+typedef size_t ExpressionHandle;
 
 enum ExpressionType
 {
 	ExpressionType_Error,
+
 	ExpressionType_IntLiteral,
 	ExpressionType_Identifier,
+
+	ExpressionType_Addition,
+	ExpressionType_Subtraction,
 };
 typedef enum ExpressionType ExpressionType;
+
+struct BinaryExpression
+{
+	ExpressionHandle lhs;
+	ExpressionHandle rhs;
+};
+typedef struct BinaryExpression BinaryExpression;
 
 struct Expression
 {
@@ -147,6 +157,7 @@ struct Expression
 	{
 		Token int_literal;
 		Token identifier;
+		BinaryExpression binary;
 	};
 };
 typedef struct Expression Expression;
@@ -162,13 +173,13 @@ typedef enum StatementType StatementType;
 struct VariableAssignmentStatement
 {
 	Token identifier;
-	Expression expression;
+	ExpressionHandle expression;
 };
 typedef struct VariableAssignmentStatement VariableAssignmentStatement;
 
 struct ReturnStatement
 {
-	Expression expression;
+	ExpressionHandle expression;
 };
 typedef struct ReturnStatement ReturnStatement;
 
@@ -187,8 +198,17 @@ typedef struct Statement Statement;
 struct Program
 {
 	Statement* statements;
-	size_t count;
-	size_t capacity;
+	size_t statement_count;
+	size_t statement_capacity;
+
+	Expression* expressions;
+	size_t expression_count;
+	size_t expression_capacity;
 };
 typedef struct Program Program;
+
+static Expression program_get_expression(Program* program, ExpressionHandle expression_handle)
+{
+	return program->expressions[expression_handle];
+}
 

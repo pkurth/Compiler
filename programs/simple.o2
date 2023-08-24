@@ -3,4 +3,4 @@ int var = 13;
 int x = 2; // End of line comment.
 int y = var;
 
-return y;
+return var-(x+y-5)-5;

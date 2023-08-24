@@ -65,7 +65,7 @@ int main(int argc, char** argv)
 		//print_tokens(tokens);
 
 		Program program = parse(tokens);
-		//print_program(program);
+		print_program(program);
 
 		String result = generate(program);
 

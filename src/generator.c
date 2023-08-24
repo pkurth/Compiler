@@ -61,7 +61,7 @@ static void generate_exit(const char* result, String* assembly)
 	);
 }
 
-static void generate_expression(Expression expression, Stack* stack, String* assembly)
+static void generate_expression(Program* program, Expression expression, Stack* stack, String* assembly)
 {
 	if (expression.type == ExpressionType_Identifier)
 	{
@@ -84,25 +84,41 @@ static void generate_expression(Expression expression, Stack* stack, String* ass
 		register_load_literal(expression.int_literal.str, "rax", assembly);
 		stack_push(stack, "rax", assembly);
 	}
+	else if (expression.type >= ExpressionType_Addition && expression.type <= ExpressionType_Subtraction)
+	{
+		Expression a = program_get_expression(program, expression.binary.lhs);
+		Expression b = program_get_expression(program, expression.binary.rhs);
+		generate_expression(program, a, stack, assembly);
+		generate_expression(program, b, stack, assembly);
+
+		stack_pop(stack, "rbx", assembly);
+		stack_pop(stack, "rax", assembly);
+
+		const char* ops[] = { "add", "sub" };
+
+		string_push(assembly, "%s rax, rbx\n", ops[expression.type - ExpressionType_Addition]);
+
+		stack_push(stack, "rax", assembly);
+	}
 }
 
-static void generate_statement(Statement statement, Stack* stack, String* assembly)
+static void generate_statement(Program* program, Statement statement, Stack* stack, String* assembly)
 {
 	if (statement.type == StatementType_VariableAssignment)
 	{
 		Token identifier = statement.variable_assignment.identifier;
 		assert(!stack_find_variable(stack, identifier.str));
 
-		Expression expression = statement.variable_assignment.expression;
-		generate_expression(expression, stack, assembly);
+		Expression expression = program_get_expression(program, statement.variable_assignment.expression);
+		generate_expression(program, expression, stack, assembly);
 
 		StackVariable variable = { .name = identifier.str, .stack_location = stack->stack_ptr };
 		stack->variables[stack->variable_count++] = variable;
 	}
 	else if (statement.type == StatementType_Return)
 	{
-		Expression expression = statement.ret.expression;
-		generate_expression(expression, stack, assembly);
+		Expression expression = program_get_expression(program, statement.ret.expression);
+		generate_expression(program, expression, stack, assembly);
 
 		stack_pop(stack, "rax", assembly);
 		generate_exit("eax", assembly);
@@ -125,10 +141,10 @@ String generate(Program program)
 	);
 
 
-	for (size_t i = 0; i < program.count; ++i)
+	for (size_t i = 0; i < program.statement_count; ++i)
 	{
 		Statement statement = program.statements[i];
-		generate_statement(statement, &stack, &assembly);
+		generate_statement(&program, statement, &stack, &assembly);
 	}
 
 	generate_exit("0", &assembly); // In case program didn't have return statement.
