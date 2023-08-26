@@ -50,7 +50,7 @@ i32 main(i32 argc, char** argv)
 {
 	if (argc != 3)
 	{
-		fprintf(stderr, "Invalid number of arguments.\nUsage: oxygen <file.o2> <out.asm>\n");
+		fprintf(stderr, "Invalid number of arguments.\nUsage: %s <file.o2> <out.asm>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -59,7 +59,7 @@ i32 main(i32 argc, char** argv)
 	if (contents.len > 0)
 	{
 		TokenStream tokens = tokenize(contents);
-		//print_tokens(&tokens);
+		print_tokens(&tokens);
 
 		Program program = parse(tokens);
 		print_program(&program);

@@ -3,25 +3,10 @@
 #include <assert.h>
 
 
-static void push_statement(Program* stream, Statement statement)
-{
-	if (stream->statement_count == stream->statement_capacity)
-	{
-		stream->statement_capacity = max(stream->statement_capacity * 2, 16);
-		stream->statements = realloc(stream->statements, sizeof(Statement) * stream->statement_capacity);
-	}
-	stream->statements[stream->statement_count++] = statement;
-}
-
 static ExpressionHandle push_expression(Program* stream, Expression expression)
 {
-	if (stream->expression_count == stream->expression_capacity)
-	{
-		stream->expression_capacity = max(stream->expression_capacity * 2, 16);
-		stream->expressions = realloc(stream->expressions, sizeof(expression) * stream->expression_capacity);
-	}
-	ExpressionHandle result = stream->expression_count++;
-	stream->expressions[result] = expression;
+	ExpressionHandle result = stream->expressions.count;
+	array_push(&stream->expressions, expression);
 	return result;
 }
 
@@ -34,7 +19,7 @@ typedef struct ParseContext ParseContext;
 
 static TokenType context_peek(ParseContext* context)
 {
-	return context->tokens.tokens[context->current_token].type;
+	return context->tokens.items[context->current_token].type;
 }
 
 static void context_advance(ParseContext* context)
@@ -44,7 +29,7 @@ static void context_advance(ParseContext* context)
 
 static Token context_consume(ParseContext* context)
 {
-	return context->tokens.tokens[context->current_token++];
+	return context->tokens.items[context->current_token++];
 }
 
 static ExpressionHandle parse_expression(ParseContext* context, Program* program, i32 min_precedence);
@@ -79,22 +64,46 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 	return 0;
 }
 
+enum Associativity
+{
+	Associativity_Right,
+	Associativity_Left,
+};
+typedef enum Associativity Associativity;
+
+struct OperatorInfo
+{
+	ExpressionType expression_type;
+	Associativity associativity;
+	i32 precedence;
+};
+typedef struct OperatorInfo OperatorInfo;
+
+
+static OperatorInfo operator_infos[] =
+{
+	{ ExpressionType_Less, Associativity_Left, 7 },
+	{ ExpressionType_Greater, Associativity_Left, 7 },
+	{ ExpressionType_LeftShift, Associativity_Left, 8 },
+	{ ExpressionType_RightShift, Associativity_Left, 8 },
+	{ ExpressionType_Addition, Associativity_Left, 9 },
+	{ ExpressionType_Subtraction, Associativity_Left, 9 },
+	{ ExpressionType_Multiplication, Associativity_Left, 10 },
+	{ ExpressionType_Division, Associativity_Left, 10 },
+	{ ExpressionType_BitwiseAnd, Associativity_Left, 5 },
+	{ ExpressionType_BitwiseOr, Associativity_Left, 3 },
+	{ ExpressionType_BitwiseXor, Associativity_Left, 4 },
+	{ ExpressionType_Modulo, Associativity_Left, 10 },
+	{ ExpressionType_LogicalAnd, Associativity_Left, 2 },
+	{ ExpressionType_LogicalOr, Associativity_Left, 1 },
+	{ ExpressionType_Equal, Associativity_Left, 6 },
+	{ ExpressionType_NotEqual, Associativity_Left, 6 },
+	{ ExpressionType_LessEqual, Associativity_Left, 7 },
+	{ ExpressionType_GreaterEqual, Associativity_Left, 7 },
+};
+
 static ExpressionHandle parse_expression(ParseContext* context, Program* program, i32 min_precedence)
 {
-	enum Associativity
-	{
-		Associativity_Left,
-		Associativity_Right,
-	};
-	typedef enum Associativity Associativity;
-
-	i32 operator_precedences[] =
-	{
-		1, // ExpressionType_Addition
-		1, // ExpressionType_Subtraction
-	};
-
-
 	// https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing
 
 	ExpressionHandle lhs = parse_atom(context, program);
@@ -102,28 +111,24 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 	for (;;)
 	{
 		TokenType next_token_type = context_peek(context);
-
-		i32 is_binary_operator = next_token_type == TokenType_Plus || next_token_type == TokenType_Minus;
-		if (!is_binary_operator)
+		if (!token_is_binary_operator(next_token_type))
 		{
 			break;
 		}
 
-		ExpressionType type = (next_token_type == TokenType_Plus) ? ExpressionType_Addition : ExpressionType_Subtraction;
-		i32 precedence = operator_precedences[type - ExpressionType_Addition];
-		if (precedence < min_precedence)
+		OperatorInfo info = operator_infos[next_token_type - TokenType_FirstBinaryOperator];
+		if (info.precedence < min_precedence)
 		{
 			break;
 		}
 
-		Associativity associativity = Associativity_Left;
-		i32 next_min_precedence = (associativity == Associativity_Left) ? (precedence + 1) : precedence;
+		i32 next_min_precedence = info.precedence + info.associativity;
 		
 		context_advance(context);
 
 		ExpressionHandle rhs = parse_expression(context, program, next_min_precedence);
 
-		Expression operation = { .type = type, { .binary = { .lhs = lhs, .rhs = rhs } } };
+		Expression operation = { .type = info.expression_type, { .binary = { .lhs = lhs, .rhs = rhs } } };
 		lhs = push_expression(program, operation);
 	}
 
@@ -141,7 +146,7 @@ static Statement parse_statement(ParseContext* context, Program* program)
 		{
 			Token identifier = context_consume(context);
 
-			if (context_peek(context) == TokenType_Equals)
+			if (context_peek(context) == TokenType_Equal)
 			{
 				context_advance(context);
 
@@ -185,7 +190,7 @@ static Statement parse_statement(ParseContext* context, Program* program)
 	{
 		if (context_peek(context) != TokenType_EOF)
 		{
-			fprintf(stderr, "Error in line %d\n", (i32)context->tokens.tokens[context->current_token].line);
+			fprintf(stderr, "Error in line %d\n", (i32)context->tokens.items[context->current_token].line);
 		}
 		else
 		{
@@ -218,7 +223,7 @@ Program parse(TokenStream stream)
 		Statement statement = parse_statement(&context, &program);
 		if (statement.type != StatementType_Error)
 		{
-			push_statement(&program, statement);
+			array_push(&program.statements, statement);
 		}
 	}
 
@@ -227,16 +232,33 @@ Program parse(TokenStream stream)
 
 void free_program(Program* program)
 {
-	free(program->statements);
-	program->statements = 0;
-	program->statement_capacity = 0;
-	program->statement_count = 0;
-
-	free(program->expressions);
-	program->expressions = 0;
-	program->expression_capacity = 0;
-	program->expression_count = 0;
+	array_free(&program->statements);
+	array_free(&program->expressions);
 }
+
+
+static const char* operator_strings[] =
+{
+	"",
+	"<",
+	">",
+	"<<",
+	">>",
+	"+",
+	"-",
+	"*",
+	"/",
+	"&",
+	"|",
+	"^",
+	"%",
+	"&&",
+	"||",
+	"==",
+	"!=",
+	"<=",
+	">=",
+};
 
 static void print_expression(Program* program, ExpressionHandle expression_handle, i32 indent, i32* active_mask)
 {
@@ -249,6 +271,10 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 	}
 
 	Expression expression = program_get_expression(program, expression_handle);
+	if (expression.type == ExpressionType_Error)
+	{
+		return;
+	}
 
 	*active_mask |= (1 << indent);
 
@@ -260,9 +286,9 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 	{
 		printf("%.*s (%d)\n", (i32)expression.identifier.str.len, expression.identifier.str.str, (i32)expression_handle);
 	}
-	else if (expression.type == ExpressionType_Addition || expression.type == ExpressionType_Subtraction)
+	else
 	{
-		printf("%s (%d)\n", expression.type == ExpressionType_Addition ? "+" : "-", (i32)expression_handle);
+		printf("%s (%d)\n", operator_strings[expression.type], (i32)expression_handle);
 
 		print_expression(program, expression.binary.lhs, indent + 1, active_mask);
 		*active_mask &= ~(1 << indent);
@@ -274,9 +300,9 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 
 void print_program(Program* program)
 {
-	for (u64 i = 0; i < program->statement_count; ++i)
+	for (u64 i = 0; i < program->statements.count; ++i)
 	{
-		Statement statement = program->statements[i];
+		Statement statement = program->statements.items[i];
 
 		i32 active_mask = 0;
 

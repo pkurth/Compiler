@@ -3,29 +3,17 @@
 #include <ctype.h>
 
 
-static void push_token(TokenStream* stream, Token token)
-{
-	if (stream->count == stream->capacity)
-	{
-		stream->capacity = max(stream->capacity * 2, 16);
-		stream->tokens = realloc(stream->tokens, sizeof(Token) * stream->capacity);
-	}
-	stream->tokens[stream->count++] = token;
-}
-
 TokenStream tokenize(String contents)
 {
 	TokenType character_to_token_type[256] = { 0 };
-	character_to_token_type['!'] = TokenType_ExclamationPoint;
-	character_to_token_type['"'] = TokenType_DoubleQuotationMark;
+	character_to_token_type['!'] = TokenType_Exclamation;
 	character_to_token_type['#'] = TokenType_Hashtag;
 	character_to_token_type['$'] = TokenType_Dollar;
 	character_to_token_type['%'] = TokenType_Percent;
 	character_to_token_type['&'] = TokenType_Ampersand;
-	character_to_token_type['\''] = TokenType_SingleQuotationMark;
 	character_to_token_type['('] = TokenType_OpenParenthesis;
 	character_to_token_type[')'] = TokenType_CloseParenthesis;
-	character_to_token_type['*'] = TokenType_Asterisk;
+	character_to_token_type['*'] = TokenType_Star;
 	character_to_token_type['+'] = TokenType_Plus;
 	character_to_token_type[','] = TokenType_Comma;
 	character_to_token_type['-'] = TokenType_Minus;
@@ -34,15 +22,13 @@ TokenStream tokenize(String contents)
 	character_to_token_type[':'] = TokenType_Colon;
 	character_to_token_type[';'] = TokenType_Semicolon;
 	character_to_token_type['<'] = TokenType_Less;
-	character_to_token_type['='] = TokenType_Equals;
+	character_to_token_type['='] = TokenType_Equal;
 	character_to_token_type['>'] = TokenType_Greater;
 	character_to_token_type['?'] = TokenType_QuestionMark;
 	character_to_token_type['@'] = TokenType_At;
 	character_to_token_type['['] = TokenType_OpenBracket;
-	character_to_token_type['\\'] = TokenType_BackwardSlash;
 	character_to_token_type[']'] = TokenType_CloseBracket;
 	character_to_token_type['^'] = TokenType_Hat;
-	character_to_token_type['_'] = TokenType_Underscore;
 	character_to_token_type['{'] = TokenType_OpenBrace;
 	character_to_token_type['|'] = TokenType_Pipe;
 	character_to_token_type['}'] = TokenType_CloseBrace;
@@ -57,6 +43,8 @@ TokenStream tokenize(String contents)
 	for (u64 i = 0; i < contents.len; ++i)
 	{
 		char c = contents.str[i];
+		char next_c = (i + 1 < contents.len) ? contents.str[i + 1] : 0;
+
 		if (c == '\n')
 		{
 			++line;
@@ -66,9 +54,8 @@ TokenStream tokenize(String contents)
 			continue;
 		}
 
-		if (c == '/' && i < contents.len - 1)
+		if (c == '/')
 		{
-			char next_c = contents.str[i + 1];
 			if (next_c == '/')
 			{
 				for (; i < contents.len && contents.str[i] != '\n'; ++i) {}
@@ -77,7 +64,22 @@ TokenStream tokenize(String contents)
 			}
 		}
 
-		Token token = { .type = character_to_token_type[c], .str = {.str = contents.str + i, .len = 1 }, .line = line };
+		Token token = { .type = character_to_token_type[c], .str = { .str = contents.str + i, .len = 1 }, .line = line };
+
+		b32 is_angle = (c == '<') || (c == '>');
+		b32 is_and_or_or = (c == '&') || (c == '|');
+		b32 can_repeat = is_angle || is_and_or_or;
+		b32 repeats = can_repeat && (c == next_c);
+		token.type += repeats * (is_angle ? (TokenType_LessLess - TokenType_Less) : (TokenType_AmpersandAmpersand - TokenType_Ampersand));
+		token.str.len += repeats;
+
+		b32 can_have_equal_followup = (token.type >= TokenType_Equal && token.type <= TokenType_Percent);
+		char followup = (i + 1 + repeats < contents.len) ? contents.str[i + 1 + repeats] : 0;
+		u32 equal_followup_offset = (TokenType_EqualEqual - TokenType_Equal);
+		
+		b32 is_operator_equal = can_have_equal_followup && (followup == '=');
+		token.type += is_operator_equal * equal_followup_offset;
+		token.str.len += is_operator_equal;
 
 		if (isalpha(c) || c == '_')
 		{
@@ -121,60 +123,96 @@ TokenStream tokenize(String contents)
 			token.type = TokenType_IntLiteral;
 		}
 
-		push_token(&stream, token);
+		array_push(&stream, token);
 
 		i += token.str.len - 1;
 	}
 
 	Token eof_token = { .type = TokenType_EOF };
-	push_token(&stream, eof_token);
+	array_push(&stream, eof_token);
 
 	return stream;
 }
 
 void free_token_stream(TokenStream* tokens)
 {
-	free(tokens->tokens);
-	tokens->tokens = 0;
-	tokens->capacity = 0;
-	tokens->count = 0;
+	array_free(tokens);
 }
 
 void print_tokens(TokenStream* tokens)
 {
-	const char token_type_to_character[] =
-	{
-		'!', '"' ,'#', '$','%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^', '_', '{', '|', '}', '~',
-	};
-
-	const char* token_type_to_keyword[] =
-	{
-		"if", "while", "for", "return", "int",
-	};
+	const char* token_strings[TokenType_Count] = { 0 };
+	token_strings[TokenType_Unknown] = "UNKNOWN";
+	token_strings[TokenType_EOF] = "";
+	token_strings[TokenType_If] = "if";
+	token_strings[TokenType_While] = "while";
+	token_strings[TokenType_For] = "for";
+	token_strings[TokenType_Return] = "return";
+	token_strings[TokenType_Int] = "int";
+	token_strings[TokenType_OpenParenthesis] = "(";
+	token_strings[TokenType_CloseParenthesis] = ")";
+	token_strings[TokenType_OpenBracket] = "[";
+	token_strings[TokenType_CloseBracket] = "]";
+	token_strings[TokenType_OpenBrace] = "{";
+	token_strings[TokenType_CloseBrace] = "}";
+	token_strings[TokenType_Semicolon] = ";";
+	token_strings[TokenType_Period] = ".";
+	token_strings[TokenType_Comma] = ",";
+	token_strings[TokenType_Colon] = ":";
+	token_strings[TokenType_Hashtag] = "#";
+	token_strings[TokenType_Dollar] = "$";
+	token_strings[TokenType_At] = "@";
+	token_strings[TokenType_QuestionMark] = "?";
+	token_strings[TokenType_Exclamation] = "!";
+	token_strings[TokenType_ExclamationEqual] = "!=";
+	token_strings[TokenType_Plus] = "+";
+	token_strings[TokenType_PlusEqual] = "+=";
+	token_strings[TokenType_Minus] = "-";
+	token_strings[TokenType_MinusEqual] = "-=";
+	token_strings[TokenType_Star] = "*";
+	token_strings[TokenType_StarEqual] = "*=";
+	token_strings[TokenType_ForwardSlash] = "/";
+	token_strings[TokenType_ForwardSlashEqual] = "/=";
+	token_strings[TokenType_Ampersand] = "&";
+	token_strings[TokenType_AmpersandEqual] = "&=";
+	token_strings[TokenType_Pipe] = "|";
+	token_strings[TokenType_PipeEqual] = "|=";
+	token_strings[TokenType_Hat] = "^";
+	token_strings[TokenType_HatEqual] = "^=";
+	token_strings[TokenType_Tilde] = "~";
+	token_strings[TokenType_Percent] = "%";
+	token_strings[TokenType_PercentEqual] = "%=";
+	token_strings[TokenType_Equal] = "=";
+	token_strings[TokenType_EqualEqual] = "==";
+	token_strings[TokenType_Less] = "<";
+	token_strings[TokenType_LessEqual] = "<=";
+	token_strings[TokenType_LessLess] = "<<";
+	token_strings[TokenType_LessLessEqual] = "<<=";
+	token_strings[TokenType_Greater] = ">";
+	token_strings[TokenType_GreaterEqual] = ">=";
+	token_strings[TokenType_GreaterGreater] = ">>";
+	token_strings[TokenType_GreaterGreaterEqual] = ">>=";
 
 	for (u64 i = 0; i < tokens->count; ++i)
 	{
-		Token token = tokens->tokens[i];
+		Token token = tokens->items[i];
 
-		if (token.type >= TokenType_ExclamationPoint && token.type <= TokenType_Tilde)
+		if (token.type == TokenType_Identifier)
 		{
-			printf("%c\n", token_type_to_character[token.type - TokenType_ExclamationPoint]);
-		}
-		else if (token.type >= TokenType_If && token.type <= TokenType_Int)
-		{
-			printf("%s\n", token_type_to_keyword[token.type - TokenType_If]);
-		}
-		else if (token.type == TokenType_Identifier)
-		{
-			printf("Identifier: %.*s\n", (i32)token.str.len, token.str.str);
+			printf("%.*s ", (i32)token.str.len, token.str.str);
 		}
 		else if (token.type == TokenType_IntLiteral)
 		{
-			printf("Integer literal: %.*s\n", (i32)token.str.len, token.str.str);
+			printf("%.*s ", (i32)token.str.len, token.str.str);
 		}
 		else
 		{
-			printf("UNKNOWN TOKEN TYPE\n");
+			printf("%s ", token_strings[token.type]);
+		}
+		
+		if (token.type == TokenType_Semicolon || token.type == TokenType_EOF)
+		{
+			printf("\n");
 		}
 	}
 }

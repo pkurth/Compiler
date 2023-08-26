@@ -20,6 +20,9 @@ typedef uint64_t u64;
 typedef float f32;
 typedef double f64;
 
+typedef u32 b32;
+
+
 
 struct String
 {
@@ -37,7 +40,7 @@ static void free_string(String* s)
 	s->len = 0;
 }
 
-static u32 string_equal(String s1, String s2)
+static b32 string_equal(String s1, String s2)
 {
 	return s1.len == s2.len && strncmp(s1.str, s2.str, s1.len) == 0;
 }
@@ -51,14 +54,47 @@ static void string_push(String* string, const char* format, ...)
 }
 
 
+#define DynamicArray(ItemType)														\
+	struct																			\
+	{																				\
+		ItemType* items;															\
+		u64 count;																	\
+		u64 capacity;																\
+	}
+
+#define array_push(a, item)															\
+	do																				\
+	{																				\
+		if ((a)->count == (a)->capacity)											\
+		{																			\
+			(a)->capacity = max((a)->capacity * 2, 16);								\
+			(a)->items = realloc((a)->items, sizeof(*(a)->items) * (a)->capacity);	\
+		}																			\
+		(a)->items[(a)->count++] = item;											\
+	} while (0)
+
+#define array_free(a)																\
+	do																				\
+	{																				\
+		free((a)->items);															\
+		(a)->items = 0;																\
+		(a)->capacity = 0;															\
+		(a)->count = 0;																\
+	} while (0)
 
 
 
 
+
+
+
+
+// https://github.com/stuartcarnie/clang/blob/master/include/clang/Basic/TokenKinds.def
 
 enum TokenType
 {
 	TokenType_Unknown,
+	TokenType_EOF,
 
 	// Keywords.
 	TokenType_If,
@@ -67,48 +103,89 @@ enum TokenType
 	TokenType_Return,
 	TokenType_Int,
 
-	// Single characters.
-	TokenType_ExclamationPoint,
-	TokenType_DoubleQuotationMark,
-	TokenType_Hashtag,
-	TokenType_Dollar,
-	TokenType_Percent,
-	TokenType_Ampersand,
-	TokenType_SingleQuotationMark,
+
+	// Operators.
 	TokenType_OpenParenthesis,
 	TokenType_CloseParenthesis,
-	TokenType_Asterisk,
-	TokenType_Plus,
-	TokenType_Comma,
-	TokenType_Minus,
-	TokenType_Period,
-	TokenType_ForwardSlash,
-	TokenType_Colon,
-	TokenType_Semicolon,
-	TokenType_Less,
-	TokenType_Equals,
-	TokenType_Greater,
-	TokenType_QuestionMark,
-	TokenType_At,
 	TokenType_OpenBracket,
-	TokenType_BackwardSlash,
 	TokenType_CloseBracket,
-	TokenType_Hat,
-	TokenType_Underscore,
 	TokenType_OpenBrace,
-	TokenType_Pipe,
 	TokenType_CloseBrace,
+
+	TokenType_Semicolon,
+	TokenType_Period,
+	TokenType_Comma,
+	TokenType_Colon,
+	TokenType_Hashtag,
+	TokenType_Dollar,
+	TokenType_At,
+	TokenType_QuestionMark,
 	TokenType_Tilde,
 
+	TokenType_Equal,
+	TokenType_Exclamation,
 
+	// Start of binary operators.
+	TokenType_Less,
+	TokenType_Greater,
+	TokenType_LessLess,
+	TokenType_GreaterGreater,
+
+	TokenType_Plus,
+	TokenType_Minus,
+	TokenType_Star,
+	TokenType_ForwardSlash,
+	TokenType_Ampersand,
+	TokenType_Pipe,
+	TokenType_Hat,
+	TokenType_Percent,
+
+	TokenType_AmpersandAmpersand,
+	TokenType_PipePipe,
+
+	TokenType_EqualEqual,
+	TokenType_ExclamationEqual,
+
+	TokenType_LessEqual,
+	TokenType_GreaterEqual,
+	// End of binary operators.
+
+
+	TokenType_LessLessEqual,
+	TokenType_GreaterGreaterEqual,
+
+	TokenType_PlusEqual,
+	TokenType_MinusEqual,
+	TokenType_StarEqual,
+	TokenType_ForwardSlashEqual,
+	TokenType_AmpersandEqual,
+	TokenType_PipeEqual,
+	TokenType_HatEqual,
+	TokenType_PercentEqual,
+
+
+	// Other.
 	TokenType_Identifier,
 	TokenType_IntLiteral,
 
-	TokenType_EOF,
 
 	TokenType_Count,
+
+
+	TokenType_FirstBinaryOperator = TokenType_Less,
+	TokenType_LastBinaryOperator = TokenType_GreaterEqual,
 };
 typedef enum TokenType TokenType;
+
+static b32 token_is_unary_operator(TokenType type)
+{
+	return (type == TokenType_Tilde) || (type == TokenType_Exclamation);
+}
+
+static b32 token_is_binary_operator(TokenType type)
+{
+	return (type >= TokenType_FirstBinaryOperator) && (type <= TokenType_LastBinaryOperator);
+}
 
 
 struct Token
@@ -119,15 +196,7 @@ struct Token
 };
 typedef struct Token Token;
 
-
-struct TokenStream
-{
-	Token* tokens;
-	u64 count;
-	u64 capacity;
-};
-typedef struct TokenStream TokenStream;
-
+typedef DynamicArray(Token) TokenStream;
 
 
 
@@ -144,11 +213,30 @@ enum ExpressionType
 {
 	ExpressionType_Error,
 
+	ExpressionType_Less,
+	ExpressionType_Greater,
+	ExpressionType_LeftShift,
+	ExpressionType_RightShift,
+	ExpressionType_Addition,
+	ExpressionType_Subtraction,
+	ExpressionType_Multiplication,
+	ExpressionType_Division,
+	ExpressionType_BitwiseAnd,
+	ExpressionType_BitwiseOr,
+	ExpressionType_BitwiseXor,
+	ExpressionType_Modulo,
+	ExpressionType_LogicalAnd,
+	ExpressionType_LogicalOr,
+	ExpressionType_Equal,
+	ExpressionType_NotEqual,
+	ExpressionType_LessEqual,
+	ExpressionType_GreaterEqual,
+
 	ExpressionType_IntLiteral,
 	ExpressionType_Identifier,
 
-	ExpressionType_Addition,
-	ExpressionType_Subtraction,
+	
+	ExpressionType_Count,
 };
 typedef enum ExpressionType ExpressionType;
 
@@ -205,20 +293,16 @@ struct Statement
 };
 typedef struct Statement Statement;
 
+
 struct Program
 {
-	Statement* statements;
-	u64 statement_count;
-	u64 statement_capacity;
-
-	Expression* expressions;
-	u64 expression_count;
-	u64 expression_capacity;
+	DynamicArray(Statement) statements;
+	DynamicArray(Expression) expressions;
 };
 typedef struct Program Program;
 
 static Expression program_get_expression(Program* program, ExpressionHandle expression_handle)
 {
-	return program->expressions[expression_handle];
+	return program->expressions.items[expression_handle];
 }
 
