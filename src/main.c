@@ -62,13 +62,16 @@ i32 main(i32 argc, char** argv)
 		print_tokens(&tokens);
 
 		Program program = parse(tokens);
-		print_program(&program);
+		if (!program.has_errors)
+		{
+			print_program(&program);
 
-		String result = generate(program);
+			String result = generate(program);
+			write_file(argv[2], result);
 
-		write_file(argv[2], result);
+			free_string(&result);
+		}
 
-		free_string(&result);
 		free_program(&program);
 		free_token_stream(&tokens);
 	}

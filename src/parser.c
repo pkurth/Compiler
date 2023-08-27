@@ -17,7 +17,12 @@ struct ParseContext
 };
 typedef struct ParseContext ParseContext;
 
-static TokenType context_peek(ParseContext* context)
+static Token context_peek(ParseContext* context)
+{
+	return context->tokens.items[context->current_token];
+}
+
+static TokenType context_peek_type(ParseContext* context)
 {
 	return context->tokens.items[context->current_token].type;
 }
@@ -94,6 +99,39 @@ static ExpressionType assignment_operator_infos[TokenType_Count] =
 };
 
 
+static b32 context_expect_not_eof(ParseContext* context)
+{
+	b32 result = context_peek_type(context) != TokenType_EOF;
+	if (!result)
+	{
+		fprintf(stderr, "LINE %d: Unexpected EOF.\n", (i32)context_peek(context).line);
+	}
+	return result;
+}
+
+static b32 context_expect(ParseContext* context, TokenType expected)
+{
+	b32 result = context_peek_type(context) == expected;
+	if (!result)
+	{
+		Token unexpected_token = context_peek(context);
+		if (expected == TokenType_Identifier)
+		{
+			fprintf(stderr, "LINE %d: Expected identifier, got '%.*s'.\n", (i32)unexpected_token.line, (i32)unexpected_token.str.len, unexpected_token.str.str);
+		}
+		else if (expected == TokenType_IntLiteral)
+		{
+			fprintf(stderr, "LINE %d: Expected literal, got '%.*s'.\n", (i32)unexpected_token.line, (i32)unexpected_token.str.len, unexpected_token.str.str);
+		}
+		else
+		{
+			const char* expected_str = token_type_to_string(expected);
+			fprintf(stderr, "LINE %d: Expected '%s', got '%.*s'.\n", (i32)unexpected_token.line, expected_str, (i32)unexpected_token.str.len, unexpected_token.str.str);
+		}
+	}
+	return result;
+}
+
 static ExpressionHandle parse_expression(ParseContext* context, Program* program, i32 min_precedence);
 
 static ExpressionHandle parse_atom(ParseContext* context, Program* program)
@@ -103,10 +141,8 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 	if (token.type == TokenType_OpenParenthesis)
 	{
 		ExpressionHandle result = parse_expression(context, program, 1);
-		TokenType next_token_type = context_peek(context);
-		if (next_token_type != TokenType_CloseParenthesis)
+		if (!context_expect(context, TokenType_CloseParenthesis))
 		{
-			fprintf(stderr, "Expected ')'\n");
 			return 0;
 		}
 		context_advance(context);
@@ -122,10 +158,14 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 		Expression expression = { .type = ExpressionType_Identifier, .identifier = token };
 		return push_expression(program, expression);
 	}
-	else if (token_is_unary_operator(token.type) && (context_peek(context) != TokenType_EOF))
+	else if (token_is_unary_operator(token.type) && context_expect_not_eof(context))
 	{
 		Expression expression = { .type = unary_operator_infos[token.type], {.unary = { .expression = parse_atom(context, program) } } };
 		return push_expression(program, expression);
+	}
+	else
+	{
+		fprintf(stderr, "LINE %d: Unexpected token '%.*s'.\n", (i32)token.line, (i32)token.str.len, token.str.str);
 	}
 
 	return 0;
@@ -139,7 +179,7 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 
 	for (;;)
 	{
-		TokenType next_token_type = context_peek(context);
+		TokenType next_token_type = context_peek_type(context);
 		if (!token_is_binary_operator(next_token_type))
 		{
 			break;
@@ -171,20 +211,20 @@ static Statement parse_statement(ParseContext* context, Program* program)
 	Token token = context_consume(context);
 	if (token.type == TokenType_Int)
 	{
-		if (context_peek(context) == TokenType_Identifier)
+		if (context_expect(context, TokenType_Identifier))
 		{
 			Token identifier = context_consume(context);
 
-			if (context_peek(context) == TokenType_Equal)
+			if (context_expect(context, TokenType_Equal))
 			{
 				context_advance(context);
 
-				if (context_peek(context) != TokenType_EOF)
+				if (context_expect_not_eof(context))
 				{
 					ExpressionHandle expression = parse_expression(context, program, 1);
 					if (expression)
 					{
-						if (context_peek(context) == TokenType_Semicolon)
+						if (context_expect(context, TokenType_Semicolon))
 						{
 							context_advance(context);
 
@@ -201,16 +241,16 @@ static Statement parse_statement(ParseContext* context, Program* program)
 	{
 		Token identifier = token;
 
-		if (token_is_assignment_operator(context_peek(context)))
+		if (token_is_assignment_operator(context_peek_type(context)))
 		{
 			Token assignment = context_consume(context);
 
-			if (context_peek(context) != TokenType_EOF)
+			if (context_expect_not_eof(context))
 			{
 				ExpressionHandle expression = parse_expression(context, program, 1);
 				if (expression)
 				{
-					if (context_peek(context) == TokenType_Semicolon)
+					if (context_expect(context, TokenType_Semicolon))
 					{
 						context_advance(context);
 
@@ -230,15 +270,20 @@ static Statement parse_statement(ParseContext* context, Program* program)
 				}
 			}
 		}
+		else
+		{
+			Token unexpected_token = context_peek(context);
+			fprintf(stderr, "LINE %d: Expected assignment operator, got '%.*s'.\n", (i32)unexpected_token.line, (i32)unexpected_token.str.len, unexpected_token.str.str);
+		}
 	}
 	else if (token.type == TokenType_Return)
 	{
-		if (context_peek(context) != TokenType_EOF)
+		if (context_expect_not_eof(context))
 		{
 			ExpressionHandle expression = parse_expression(context, program, 1);
 			if (expression)
 			{
-				if (context_peek(context) == TokenType_Semicolon)
+				if (context_expect(context, TokenType_Semicolon))
 				{
 					context_advance(context);
 
@@ -248,25 +293,20 @@ static Statement parse_statement(ParseContext* context, Program* program)
 			}
 		}
 	}
+	else
+	{
+		fprintf(stderr, "LINE %d: Unexpected token '%.*s'.\n", (i32)token.line, (i32)token.str.len, token.str.str);
+	}
 
 	if (statement.type == StatementType_Error)
 	{
-		if (context_peek(context) != TokenType_EOF)
-		{
-			fprintf(stderr, "Error in line %d\n", (i32)context->tokens.items[context->current_token].line);
-		}
-		else
-		{
-			fprintf(stderr, "Unexpected end of file\n");
-		}
-
-		for (; context_peek(context) != TokenType_Semicolon && context_peek(context) != TokenType_EOF; context_advance(context)) 
+		for (; context_peek_type(context) != TokenType_Semicolon && context_peek_type(context) != TokenType_EOF; context_advance(context))
 		{
 		}
 
-		if (context_peek(context) != TokenType_EOF)
+		if (context_peek_type(context) != TokenType_EOF)
 		{
-			assert(context_peek(context) == TokenType_Semicolon);
+			assert(context_peek_type(context) == TokenType_Semicolon);
 			context_advance(context);
 		}
 	}
@@ -281,14 +321,22 @@ Program parse(TokenStream stream)
 
 	push_expression(&program, (Expression) { .type = ExpressionType_Error }); // Dummy.
 
-	while (context_peek(&context) != TokenType_EOF)
+	b32 has_errors = 0;
+
+	while (context_peek_type(&context) != TokenType_EOF)
 	{
 		Statement statement = parse_statement(&context, &program);
 		if (statement.type != StatementType_Error)
 		{
 			array_push(&program.statements, statement);
 		}
+		else
+		{
+			has_errors = 1;
+		}
 	}
+
+	program.has_errors = has_errors;
 
 	return program;
 }

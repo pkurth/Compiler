@@ -192,6 +192,8 @@ static b32 token_is_assignment_operator(TokenType type)
 	return (type == TokenType_Equal) || ((type >= TokenType_LessLessEqual) && (type <= TokenType_PercentEqual));
 }
 
+const char* token_type_to_string(TokenType type);
+
 
 struct Token
 {
@@ -326,6 +328,8 @@ struct Program
 {
 	DynamicArray(Statement) statements;
 	DynamicArray(Expression) expressions;
+
+	b32 has_errors;
 };
 typedef struct Program Program;
 

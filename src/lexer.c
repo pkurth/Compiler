@@ -45,12 +45,12 @@ TokenStream tokenize(String contents)
 		char c = contents.str[i];
 		char next_c = (i + 1 < contents.len) ? contents.str[i + 1] : 0;
 
-		if (c == '\n')
-		{
-			++line;
-		}
 		if (isspace(c))
 		{
+			if (c == '\n')
+			{
+				++line;
+			}
 			continue;
 		}
 
@@ -59,7 +59,7 @@ TokenStream tokenize(String contents)
 			if (next_c == '/')
 			{
 				for (; i < contents.len && contents.str[i] != '\n'; ++i) {}
-				--i;
+				++line;
 				continue;
 			}
 		}
@@ -141,7 +141,7 @@ void free_token_stream(TokenStream* tokens)
 
 
 
-const char* token_strings[TokenType_Count] =
+static const char* token_strings[TokenType_Count] =
 {
 	[TokenType_Unknown]				= "UNKNOWN",
 	[TokenType_EOF]					= "",
@@ -195,6 +195,11 @@ const char* token_strings[TokenType_Count] =
 	[TokenType_GreaterGreaterEqual] = ">>=",
 };
 
+const char* token_type_to_string(TokenType type)
+{
+	return token_strings[type];
+}
+
 void print_tokens(TokenStream* tokens)
 {
 	for (u64 i = 0; i < tokens->count; ++i)
@@ -211,7 +216,7 @@ void print_tokens(TokenStream* tokens)
 		}
 		else
 		{
-			printf("%s ", token_strings[token.type]);
+			printf("%s ", token_type_to_string(token.type));
 		}
 		
 		if (token.type == TokenType_Semicolon || token.type == TokenType_EOF)
