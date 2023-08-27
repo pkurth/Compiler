@@ -3,6 +3,17 @@
 #include <ctype.h>
 
 
+struct TokenContinuation
+{
+	i32 num_continuations;
+	struct
+	{
+		char c;
+		TokenType type;
+	} continuations[2];
+};
+typedef struct TokenContinuation TokenContinuation;
+
 static TokenType character_to_token_type[256] =
 {
 	['!'] = TokenType_Exclamation,
@@ -34,16 +45,37 @@ static TokenType character_to_token_type[256] =
 	['~'] = TokenType_Tilde,
 };
 
+static TokenContinuation token_continuations[TokenType_Count] =
+{
+	[TokenType_Exclamation] = { 1, { {.c = '=', .type = TokenType_ExclamationEqual } } },
+	[TokenType_Ampersand] = { 2, { {.c = '=', .type = TokenType_AmpersandEqual }, {.c = '&', .type = TokenType_AmpersandAmpersand } } },
+	[TokenType_Pipe] = { 2, { {.c = '=', .type = TokenType_PipeEqual }, {.c = '|', .type = TokenType_PipePipe } } },
+	[TokenType_Hat] = { 1, { {.c = '=', .type = TokenType_HatEqual } } },
+
+	[TokenType_Plus] = { 1, { {.c = '=', .type = TokenType_PlusEqual } } },
+	[TokenType_Minus] = { 2, { {.c = '=', .type = TokenType_MinusEqual }, {.c = '>', .type = TokenType_Arrow } } },
+	[TokenType_Star] = { 1, { {.c = '=', .type = TokenType_StarEqual } } },
+	[TokenType_ForwardSlash] = { 1, { {.c = '=', .type = TokenType_ForwardSlashEqual } } },
+	[TokenType_Percent] = { 1, { {.c = '=', .type = TokenType_PercentEqual } } },
+
+	[TokenType_Less] = { 2, { {.c = '=', .type = TokenType_LessEqual }, {.c = '<', .type = TokenType_LessLess } } },
+	[TokenType_Greater] = { 2, { {.c = '=', .type = TokenType_GreaterEqual }, {.c = '>', .type = TokenType_GreaterGreater } } },
+	[TokenType_Equal] = { 1, { {.c = '=', .type = TokenType_EqualEqual } } },
+
+	[TokenType_LessLess] = { 1, { {.c = '=', .type = TokenType_LessLessEqual } } },
+	[TokenType_GreaterGreater] = { 1, { {.c = '=', .type = TokenType_GreaterGreaterEqual } } },
+};
+
 TokenStream tokenize(String contents)
 {
 	TokenStream stream = { 0 };
 
 	u64 line = 1;
 
-	for (u64 i = 0; i < contents.len; ++i)
+	for (u64 c_index = 0; c_index < contents.len; ++c_index)
 	{
-		char c = contents.str[i];
-		char next_c = (i + 1 < contents.len) ? contents.str[i + 1] : 0;
+		char c = contents.str[c_index];
+		char next_c = (c_index + 1 < contents.len) ? contents.str[c_index + 1] : 0;
 
 		if (isspace(c))
 		{
@@ -58,32 +90,35 @@ TokenStream tokenize(String contents)
 		{
 			if (next_c == '/')
 			{
-				for (; i < contents.len && contents.str[i] != '\n'; ++i) {}
+				for (; c_index < contents.len && contents.str[c_index] != '\n'; ++c_index) {}
 				++line;
 				continue;
 			}
 		}
 
-		Token token = { .type = character_to_token_type[c], .str = { .str = contents.str + i, .len = 1 }, .line = line };
+		Token token = { .type = character_to_token_type[c], .str = { .str = contents.str + c_index, .len = 1 }, .line = line };
 
-		b32 is_angle = (c == '<') || (c == '>');
-		b32 is_and_or_or = (c == '&') || (c == '|');
-		b32 can_repeat = is_angle || is_and_or_or;
-		b32 repeats = can_repeat && (c == next_c);
-		token.type += repeats * (is_angle ? (TokenType_LessLess - TokenType_Less) : (TokenType_AmpersandAmpersand - TokenType_Ampersand));
-		token.str.len += repeats;
+		TokenContinuation continuation;
 
-		b32 can_have_equal_followup = (token.type >= TokenType_Equal && token.type <= TokenType_Percent);
-		char followup = (i + 1 + repeats < contents.len) ? contents.str[i + 1 + repeats] : 0;
-		u32 equal_followup_offset = (TokenType_EqualEqual - TokenType_Equal);
+Continuations:
+		continuation = token_continuations[token.type];
+		for (i32 continuation_index = 0; continuation_index < continuation.num_continuations; ++continuation_index)
+		{
+			if (next_c == continuation.continuations[continuation_index].c)
+			{
+				token.type = continuation.continuations[continuation_index].type;
+				++token.str.len;
+
+				next_c = (c_index + token.str.len < contents.len) ? contents.str[c_index + token.str.len] : 0;
+				goto Continuations;
+			}
+		}
+
 		
-		b32 is_operator_equal = can_have_equal_followup && (followup == '=');
-		token.type += is_operator_equal * equal_followup_offset;
-		token.str.len += is_operator_equal;
 
 		if (isalpha(c) || c == '_')
 		{
-			for (u64 j = i + 1; j < contents.len && (isalnum(contents.str[j]) || contents.str[j] == '_'); ++j)
+			for (u64 j = c_index + 1; j < contents.len && (isalnum(contents.str[j]) || contents.str[j] == '_'); ++j)
 			{
 				++token.str.len;
 			}
@@ -104,9 +139,9 @@ TokenStream tokenize(String contents)
 			{
 				token.type = TokenType_Return;
 			}
-			else if (string_equal(token.str, string_from_cstr("int")))
+			else if (string_equal(token.str, string_from_cstr("i64")))
 			{
-				token.type = TokenType_Int;
+				token.type = TokenType_I64;
 			}
 			else
 			{
@@ -115,7 +150,7 @@ TokenStream tokenize(String contents)
 		}
 		else if (isdigit(c))
 		{
-			for (u64 j = i + 1; j < contents.len && isdigit(contents.str[j]); ++j)
+			for (u64 j = c_index + 1; j < contents.len && isdigit(contents.str[j]); ++j)
 			{
 				++token.str.len;
 			}
@@ -125,7 +160,7 @@ TokenStream tokenize(String contents)
 
 		array_push(&stream, token);
 
-		i += token.str.len - 1;
+		c_index += token.str.len - 1;
 	}
 
 	Token eof_token = { .type = TokenType_EOF };
@@ -149,7 +184,7 @@ static const char* token_strings[TokenType_Count] =
 	[TokenType_While]				= "while",
 	[TokenType_For]					= "for",
 	[TokenType_Return]				= "return",
-	[TokenType_Int]					= "int",
+	[TokenType_I64]					= "i64",
 	[TokenType_OpenParenthesis]		= "(",
 	[TokenType_CloseParenthesis]	= ")",
 	[TokenType_OpenBracket]			= "[",

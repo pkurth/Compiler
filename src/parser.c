@@ -209,7 +209,7 @@ static Statement parse_statement(ParseContext* context, Program* program)
 	Statement statement = { .type = StatementType_Error };
 
 	Token token = context_consume(context);
-	if (token.type == TokenType_Int)
+	if (token.type == TokenType_I64)
 	{
 		if (context_expect(context, TokenType_Identifier))
 		{

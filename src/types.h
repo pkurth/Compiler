@@ -96,15 +96,16 @@ enum TokenType
 	TokenType_Unknown,
 	TokenType_EOF,
 
+
 	// Keywords.
 	TokenType_If,
 	TokenType_While,
 	TokenType_For,
 	TokenType_Return,
-	TokenType_Int,
+	TokenType_I64,
 
 
-	// Operators.
+	// Parentheses, brackets, braces.
 	TokenType_OpenParenthesis,
 	TokenType_CloseParenthesis,
 	TokenType_OpenBracket,
@@ -112,6 +113,8 @@ enum TokenType
 	TokenType_OpenBrace,
 	TokenType_CloseBrace,
 
+
+	// Random symbols.
 	TokenType_Semicolon,
 	TokenType_Period,
 	TokenType_Comma,
@@ -121,16 +124,31 @@ enum TokenType
 	TokenType_At,
 	TokenType_QuestionMark,
 	TokenType_Tilde,
-
-	TokenType_Equal,
+	TokenType_Arrow,
 	TokenType_Exclamation,
 
-	// Start of binary operators.
+
+	// Assignment operators.
+	TokenType_Equal,
+	TokenType_LessLessEqual,
+	TokenType_GreaterGreaterEqual,
+	TokenType_PlusEqual,
+	TokenType_MinusEqual,
+	TokenType_StarEqual,
+	TokenType_ForwardSlashEqual,
+	TokenType_PercentEqual,
+	TokenType_AmpersandEqual,
+	TokenType_PipeEqual,
+	TokenType_HatEqual,
+
+
+	// Binary operators.
 	TokenType_Less,
 	TokenType_Greater,
 	TokenType_LessLess,
 	TokenType_GreaterGreater,
-
+	TokenType_LessEqual,
+	TokenType_GreaterEqual,
 	TokenType_Plus,
 	TokenType_Minus,
 	TokenType_Star,
@@ -139,29 +157,10 @@ enum TokenType
 	TokenType_Pipe,
 	TokenType_Hat,
 	TokenType_Percent,
-
 	TokenType_AmpersandAmpersand,
 	TokenType_PipePipe,
-
 	TokenType_EqualEqual,
 	TokenType_ExclamationEqual,
-
-	TokenType_LessEqual,
-	TokenType_GreaterEqual,
-	// End of binary operators.
-
-
-	TokenType_LessLessEqual,
-	TokenType_GreaterGreaterEqual,
-
-	TokenType_PlusEqual,
-	TokenType_MinusEqual,
-	TokenType_StarEqual,
-	TokenType_ForwardSlashEqual,
-	TokenType_AmpersandEqual,
-	TokenType_PipeEqual,
-	TokenType_HatEqual,
-	TokenType_PercentEqual,
 
 
 	// Other.
@@ -172,10 +171,26 @@ enum TokenType
 	TokenType_Count,
 
 
+	TokenType_FirstKeyword = TokenType_If,
+	TokenType_LastKeyword = TokenType_I64,
+
+	TokenType_FirstAssignmentOperator = TokenType_Equal,
+	TokenType_LastAssignmentOperator = TokenType_HatEqual,
+
 	TokenType_FirstBinaryOperator = TokenType_Less,
-	TokenType_LastBinaryOperator = TokenType_GreaterEqual,
+	TokenType_LastBinaryOperator = TokenType_ExclamationEqual,
 };
 typedef enum TokenType TokenType;
+
+static b32 token_is_keyword(TokenType type)
+{
+	return (type >= TokenType_FirstKeyword) && (type <= TokenType_LastKeyword);
+}
+
+static b32 token_is_assignment_operator(TokenType type)
+{
+	return (type >= TokenType_FirstAssignmentOperator) && (type <= TokenType_LastAssignmentOperator);
+}
 
 static b32 token_is_binary_operator(TokenType type)
 {
@@ -185,11 +200,6 @@ static b32 token_is_binary_operator(TokenType type)
 static b32 token_is_unary_operator(TokenType type)
 {
 	return (type == TokenType_Minus) || (type == TokenType_Tilde) || (type == TokenType_Exclamation);
-}
-
-static b32 token_is_assignment_operator(TokenType type)
-{
-	return (type == TokenType_Equal) || ((type >= TokenType_LessLessEqual) && (type <= TokenType_PercentEqual));
 }
 
 const char* token_type_to_string(TokenType type);
