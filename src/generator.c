@@ -85,7 +85,7 @@ static void generate_expression(Program* program, Expression expression, Stack* 
 		register_load_literal(expression.int_literal.str, "rax", assembly);
 		stack_push(stack, "rax", assembly);
 	}
-	else
+	else if (expression_is_binary_operation(expression.type))
 	{
 		Expression a = program_get_expression(program, expression.binary.lhs);
 		Expression b = program_get_expression(program, expression.binary.rhs);
@@ -97,24 +97,42 @@ static void generate_expression(Program* program, Expression expression, Stack* 
 
 		switch (expression.type)
 		{
+			case ExpressionType_LogicalOr:		break;
+			case ExpressionType_LogicalAnd:		break;
+			case ExpressionType_BitwiseOr:		string_push(assembly, "or rax, rbx\n"); break; // https://www.felixcloutier.com/x86/or
+			case ExpressionType_BitwiseAnd:		string_push(assembly, "and rax, rbx\n"); break; // https://www.felixcloutier.com/x86/and
+			case ExpressionType_BitwiseXor:		string_push(assembly, "xor rax, rbx\n"); break; // https://www.felixcloutier.com/x86/xor
+			case ExpressionType_Equal:			string_push(assembly, "cmp rax, rbx\nsete al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			case ExpressionType_NotEqual:		string_push(assembly, "cmp rax, rbx\nsetne al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
 			case ExpressionType_Less:			string_push(assembly, "cmp rax, rbx\nsetl al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
 			case ExpressionType_Greater:		string_push(assembly, "cmp rax, rbx\nsetg al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			case ExpressionType_LessEqual:		string_push(assembly, "cmp rax, rbx\nsetle al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			case ExpressionType_GreaterEqual:	string_push(assembly, "cmp rax, rbx\nsetge al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
 			case ExpressionType_LeftShift:		string_push(assembly, "shlx rax, rax, rbx\n"); break; // https://www.felixcloutier.com/x86/sarx:shlx:shrx
 			case ExpressionType_RightShift:		string_push(assembly, "shrx rax, rax, rbx\n"); break; // https://www.felixcloutier.com/x86/sarx:shlx:shrx
 			case ExpressionType_Addition:		string_push(assembly, "add rax, rbx\n"); break; // https://www.felixcloutier.com/x86/add
 			case ExpressionType_Subtraction:	string_push(assembly, "sub rax, rbx\n"); break; // https://www.felixcloutier.com/x86/sub
 			case ExpressionType_Multiplication: string_push(assembly, "imul rax, rbx\n"); break; // https://www.felixcloutier.com/x86/imul
 			case ExpressionType_Division:		string_push(assembly, "cqo\nidiv rbx\n"); break; // https://www.felixcloutier.com/x86/idiv
-			case ExpressionType_BitwiseAnd:		string_push(assembly, "and rax, rbx\n"); break; // https://www.felixcloutier.com/x86/and
-			case ExpressionType_BitwiseOr:		string_push(assembly, "or rax, rbx\n"); break; // https://www.felixcloutier.com/x86/or
-			case ExpressionType_BitwiseXor:		string_push(assembly, "xor rax, rbx\n"); break; // https://www.felixcloutier.com/x86/xor
-			case ExpressionType_LogicalAnd:		break;
-			case ExpressionType_LogicalOr:		break;
 			case ExpressionType_Modulo:			string_push(assembly, "cqo\nidiv rbx\nmov rax, rdx\n"); break; // https://www.felixcloutier.com/x86/idiv
-			case ExpressionType_Equal:			string_push(assembly, "cmp rax, rbx\nsete al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
-			case ExpressionType_NotEqual:		string_push(assembly, "cmp rax, rbx\nsetne al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
-			case ExpressionType_LessEqual:		string_push(assembly, "cmp rax, rbx\nsetle al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
-			case ExpressionType_GreaterEqual:	string_push(assembly, "cmp rax, rbx\nsetge al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			default:							assert(0);
+		}
+
+		stack_push(stack, "rax", assembly);
+	}
+	else if (expression_is_unary_operation(expression.type))
+	{
+		Expression a = program_get_expression(program, expression.unary.expression);
+		generate_expression(program, a, stack, assembly);
+
+		stack_pop(stack, "rax", assembly);
+
+		switch (expression.type)
+		{
+			case ExpressionType_Negate:			string_push(assembly, "neg rax\n"); break; // https://www.felixcloutier.com/x86/neg
+			case ExpressionType_BitwiseNot:		string_push(assembly, "not rax\n"); break; // https://www.felixcloutier.com/x86/not
+			case ExpressionType_Not:			string_push(assembly, "cmp rax, 0\nsete al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			default:							assert(0);
 		}
 
 		stack_push(stack, "rax", assembly);

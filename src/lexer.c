@@ -3,39 +3,39 @@
 #include <ctype.h>
 
 
+static TokenType character_to_token_type[256] =
+{
+	['!'] = TokenType_Exclamation,
+	['#'] = TokenType_Hashtag,
+	['$'] = TokenType_Dollar,
+	['%'] = TokenType_Percent,
+	['&'] = TokenType_Ampersand,
+	['('] = TokenType_OpenParenthesis,
+	[')'] = TokenType_CloseParenthesis,
+	['*'] = TokenType_Star,
+	['+'] = TokenType_Plus,
+	[','] = TokenType_Comma,
+	['-'] = TokenType_Minus,
+	['.'] = TokenType_Period,
+	['/'] = TokenType_ForwardSlash,
+	[':'] = TokenType_Colon,
+	[';'] = TokenType_Semicolon,
+	['<'] = TokenType_Less,
+	['='] = TokenType_Equal,
+	['>'] = TokenType_Greater,
+	['?'] = TokenType_QuestionMark,
+	['@'] = TokenType_At,
+	['['] = TokenType_OpenBracket,
+	[']'] = TokenType_CloseBracket,
+	['^'] = TokenType_Hat,
+	['{'] = TokenType_OpenBrace,
+	['|'] = TokenType_Pipe,
+	['}'] = TokenType_CloseBrace,
+	['~'] = TokenType_Tilde,
+};
+
 TokenStream tokenize(String contents)
 {
-	TokenType character_to_token_type[256] = { 0 };
-	character_to_token_type['!'] = TokenType_Exclamation;
-	character_to_token_type['#'] = TokenType_Hashtag;
-	character_to_token_type['$'] = TokenType_Dollar;
-	character_to_token_type['%'] = TokenType_Percent;
-	character_to_token_type['&'] = TokenType_Ampersand;
-	character_to_token_type['('] = TokenType_OpenParenthesis;
-	character_to_token_type[')'] = TokenType_CloseParenthesis;
-	character_to_token_type['*'] = TokenType_Star;
-	character_to_token_type['+'] = TokenType_Plus;
-	character_to_token_type[','] = TokenType_Comma;
-	character_to_token_type['-'] = TokenType_Minus;
-	character_to_token_type['.'] = TokenType_Period;
-	character_to_token_type['/'] = TokenType_ForwardSlash;
-	character_to_token_type[':'] = TokenType_Colon;
-	character_to_token_type[';'] = TokenType_Semicolon;
-	character_to_token_type['<'] = TokenType_Less;
-	character_to_token_type['='] = TokenType_Equal;
-	character_to_token_type['>'] = TokenType_Greater;
-	character_to_token_type['?'] = TokenType_QuestionMark;
-	character_to_token_type['@'] = TokenType_At;
-	character_to_token_type['['] = TokenType_OpenBracket;
-	character_to_token_type[']'] = TokenType_CloseBracket;
-	character_to_token_type['^'] = TokenType_Hat;
-	character_to_token_type['{'] = TokenType_OpenBrace;
-	character_to_token_type['|'] = TokenType_Pipe;
-	character_to_token_type['}'] = TokenType_CloseBrace;
-	character_to_token_type['~'] = TokenType_Tilde;
-
-
-
 	TokenStream stream = { 0 };
 
 	u64 line = 1;

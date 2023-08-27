@@ -177,14 +177,14 @@ enum TokenType
 };
 typedef enum TokenType TokenType;
 
-static b32 token_is_unary_operator(TokenType type)
-{
-	return (type == TokenType_Tilde) || (type == TokenType_Exclamation);
-}
-
 static b32 token_is_binary_operator(TokenType type)
 {
 	return (type >= TokenType_FirstBinaryOperator) && (type <= TokenType_LastBinaryOperator);
+}
+
+static b32 token_is_unary_operator(TokenType type)
+{
+	return (type == TokenType_Minus) || (type == TokenType_Tilde) || (type == TokenType_Exclamation);
 }
 
 
@@ -213,32 +213,47 @@ enum ExpressionType
 {
 	ExpressionType_Error,
 
+	// Binary expressions.
+	ExpressionType_LogicalOr,
+	ExpressionType_LogicalAnd,
+	ExpressionType_BitwiseOr,
+	ExpressionType_BitwiseAnd,
+	ExpressionType_BitwiseXor,
+	ExpressionType_Equal,
+	ExpressionType_NotEqual,
 	ExpressionType_Less,
 	ExpressionType_Greater,
+	ExpressionType_LessEqual,
+	ExpressionType_GreaterEqual,
 	ExpressionType_LeftShift,
 	ExpressionType_RightShift,
 	ExpressionType_Addition,
 	ExpressionType_Subtraction,
 	ExpressionType_Multiplication,
 	ExpressionType_Division,
-	ExpressionType_BitwiseAnd,
-	ExpressionType_BitwiseOr,
-	ExpressionType_BitwiseXor,
 	ExpressionType_Modulo,
-	ExpressionType_LogicalAnd,
-	ExpressionType_LogicalOr,
-	ExpressionType_Equal,
-	ExpressionType_NotEqual,
-	ExpressionType_LessEqual,
-	ExpressionType_GreaterEqual,
+
+	// Unary expressions.
+	ExpressionType_Negate,
+	ExpressionType_BitwiseNot,
+	ExpressionType_Not,
 
 	ExpressionType_IntLiteral,
 	ExpressionType_Identifier,
 
-	
 	ExpressionType_Count,
 };
 typedef enum ExpressionType ExpressionType;
+
+static b32 expression_is_binary_operation(ExpressionType type)
+{
+	return (type >= ExpressionType_LogicalOr) && (type <= ExpressionType_Modulo);
+}
+
+static b32 expression_is_unary_operation(ExpressionType type)
+{
+	return (type == ExpressionType_Negate) || (type == ExpressionType_BitwiseNot) || (type == ExpressionType_Not);
+}
 
 struct BinaryExpression
 {
@@ -246,6 +261,12 @@ struct BinaryExpression
 	ExpressionHandle rhs;
 };
 typedef struct BinaryExpression BinaryExpression;
+
+struct UnaryExpression
+{
+	ExpressionHandle expression;
+};
+typedef struct UnaryExpression UnaryExpression;
 
 struct Expression
 {
@@ -256,6 +277,7 @@ struct Expression
 		Token int_literal;
 		Token identifier;
 		BinaryExpression binary;
+		UnaryExpression unary;
 	};
 };
 typedef struct Expression Expression;
