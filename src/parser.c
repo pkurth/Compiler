@@ -79,6 +79,20 @@ static ExpressionType unary_operator_infos[TokenType_Count] =
 	[TokenType_Exclamation]			= ExpressionType_Not,
 };
 
+static ExpressionType assignment_operator_infos[TokenType_Count] =
+{
+	[TokenType_PipeEqual]			= ExpressionType_BitwiseOr,
+	[TokenType_HatEqual]			= ExpressionType_BitwiseXor,
+	[TokenType_AmpersandEqual]		= ExpressionType_BitwiseAnd,
+	[TokenType_LessLessEqual]		= ExpressionType_LeftShift,
+	[TokenType_GreaterGreaterEqual]	= ExpressionType_RightShift,
+	[TokenType_PlusEqual]			= ExpressionType_Addition,
+	[TokenType_MinusEqual]			= ExpressionType_Subtraction,
+	[TokenType_StarEqual]			= ExpressionType_Multiplication,
+	[TokenType_ForwardSlashEqual]	= ExpressionType_Division,
+	[TokenType_PercentEqual]		= ExpressionType_Modulo,
+};
+
 
 static ExpressionHandle parse_expression(ParseContext* context, Program* program, i32 min_precedence);
 
@@ -183,6 +197,40 @@ static Statement parse_statement(ParseContext* context, Program* program)
 			}
 		}
 	}
+	else if (token.type == TokenType_Identifier)
+	{
+		Token identifier = token;
+
+		if (token_is_assignment_operator(context_peek(context)))
+		{
+			Token assignment = context_consume(context);
+
+			if (context_peek(context) != TokenType_EOF)
+			{
+				ExpressionHandle expression = parse_expression(context, program, 1);
+				if (expression)
+				{
+					if (context_peek(context) == TokenType_Semicolon)
+					{
+						context_advance(context);
+
+						statement.type = StatementType_VariableReassignment;
+						statement.variable_assignment.identifier = identifier;
+						statement.variable_assignment.expression = expression;
+
+						if (assignment.type != TokenType_Equal)
+						{
+							Expression lhs = { .type = ExpressionType_Identifier, .identifier = identifier };
+							ExpressionHandle lhs_handle = push_expression(program, lhs);
+
+							Expression operation = { .type = assignment_operator_infos[assignment.type], { .binary = { .lhs = lhs_handle, .rhs = expression } } };
+							statement.variable_assignment.expression = push_expression(program, operation);
+						}
+					}
+				}
+			}
+		}
+	}
 	else if (token.type == TokenType_Return)
 	{
 		if (context_peek(context) != TokenType_EOF)
@@ -258,8 +306,8 @@ static const char* operator_strings[ExpressionType_Count] =
 	[ExpressionType_LogicalOr]		= "||",
 	[ExpressionType_LogicalAnd]		= "&&",
 	[ExpressionType_BitwiseOr]		= "|",
-	[ExpressionType_BitwiseAnd]		= "&",
 	[ExpressionType_BitwiseXor]		= "^",
+	[ExpressionType_BitwiseAnd]		= "&",
 	[ExpressionType_Equal]			= "==",
 	[ExpressionType_NotEqual]		= "!=",
 	[ExpressionType_Less]			= "<",
@@ -318,6 +366,10 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 		printf("%s (%d)\n", operator_strings[expression.type], (i32)expression_handle);
 		print_expression(program, expression.unary.expression, indent + 1, active_mask);
 	}
+	else
+	{
+		assert(!"Unknown expression type");
+	}
 
 	*active_mask &= ~(1 << indent);
 }
@@ -330,7 +382,7 @@ void print_program(Program* program)
 
 		i32 active_mask = 0;
 
-		if (statement.type == StatementType_VariableAssignment)
+		if (statement.type == StatementType_VariableAssignment || statement.type == StatementType_VariableReassignment)
 		{
 			Token identifier = statement.variable_assignment.identifier;
 
@@ -341,6 +393,10 @@ void print_program(Program* program)
 		{
 			printf("* Return\n");
 			print_expression(program, statement.ret.expression, 1, &active_mask);
+		}
+		else
+		{
+			assert(!"Unknown statement type");
 		}
 	}
 }

@@ -187,6 +187,11 @@ static b32 token_is_unary_operator(TokenType type)
 	return (type == TokenType_Minus) || (type == TokenType_Tilde) || (type == TokenType_Exclamation);
 }
 
+static b32 token_is_assignment_operator(TokenType type)
+{
+	return (type == TokenType_Equal) || ((type >= TokenType_LessLessEqual) && (type <= TokenType_PercentEqual));
+}
+
 
 struct Token
 {
@@ -217,8 +222,8 @@ enum ExpressionType
 	ExpressionType_LogicalOr,
 	ExpressionType_LogicalAnd,
 	ExpressionType_BitwiseOr,
-	ExpressionType_BitwiseAnd,
 	ExpressionType_BitwiseXor,
+	ExpressionType_BitwiseAnd,
 	ExpressionType_Equal,
 	ExpressionType_NotEqual,
 	ExpressionType_Less,
@@ -286,6 +291,7 @@ enum StatementType
 {
 	StatementType_Error,
 	StatementType_VariableAssignment,
+	StatementType_VariableReassignment,
 	StatementType_Return,
 };
 typedef enum StatementType StatementType;

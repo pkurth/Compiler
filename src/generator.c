@@ -100,8 +100,8 @@ static void generate_expression(Program* program, Expression expression, Stack* 
 			case ExpressionType_LogicalOr:		break;
 			case ExpressionType_LogicalAnd:		break;
 			case ExpressionType_BitwiseOr:		string_push(assembly, "or rax, rbx\n"); break; // https://www.felixcloutier.com/x86/or
-			case ExpressionType_BitwiseAnd:		string_push(assembly, "and rax, rbx\n"); break; // https://www.felixcloutier.com/x86/and
 			case ExpressionType_BitwiseXor:		string_push(assembly, "xor rax, rbx\n"); break; // https://www.felixcloutier.com/x86/xor
+			case ExpressionType_BitwiseAnd:		string_push(assembly, "and rax, rbx\n"); break; // https://www.felixcloutier.com/x86/and
 			case ExpressionType_Equal:			string_push(assembly, "cmp rax, rbx\nsete al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
 			case ExpressionType_NotEqual:		string_push(assembly, "cmp rax, rbx\nsetne al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
 			case ExpressionType_Less:			string_push(assembly, "cmp rax, rbx\nsetl al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
@@ -151,6 +151,18 @@ static void generate_statement(Program* program, Statement statement, Stack* sta
 
 		StackVariable variable = { .name = identifier.str, .stack_location = stack->stack_ptr };
 		stack->variables[stack->variable_count++] = variable;
+	}
+	else if (statement.type == StatementType_VariableReassignment)
+	{
+		Token identifier = statement.variable_assignment.identifier;
+		StackVariable* variable = stack_find_variable(stack, identifier.str);
+		assert(variable);
+
+		Expression expression = program_get_expression(program, statement.variable_assignment.expression);
+		generate_expression(program, expression, stack, assembly);
+
+		i32 offset = (i32)(stack->stack_ptr - variable->stack_location);
+		string_push(assembly, "mov [rsp+%d], rax\n", offset);
 	}
 	else if (statement.type == StatementType_Return)
 	{

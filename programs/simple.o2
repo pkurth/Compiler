@@ -1,6 +1,8 @@
 
 int a = 7;
 int b = 4 + a * 3 + -(22 + 1);
+b <<= 2;
+
 int c = 33 >= 10;
 
 return b;

@@ -139,60 +139,64 @@ void free_token_stream(TokenStream* tokens)
 	array_free(tokens);
 }
 
+
+
+const char* token_strings[TokenType_Count] =
+{
+	[TokenType_Unknown]				= "UNKNOWN",
+	[TokenType_EOF]					= "",
+	[TokenType_If]					= "if",
+	[TokenType_While]				= "while",
+	[TokenType_For]					= "for",
+	[TokenType_Return]				= "return",
+	[TokenType_Int]					= "int",
+	[TokenType_OpenParenthesis]		= "(",
+	[TokenType_CloseParenthesis]	= ")",
+	[TokenType_OpenBracket]			= "[",
+	[TokenType_CloseBracket]		= "]",
+	[TokenType_OpenBrace]			= "{",
+	[TokenType_CloseBrace]			= "}",
+	[TokenType_Semicolon]			= ";",
+	[TokenType_Period]				= ".",
+	[TokenType_Comma]				= ",",
+	[TokenType_Colon]				= ":",
+	[TokenType_Hashtag]				= "#",
+	[TokenType_Dollar]				= "$",
+	[TokenType_At]					= "@",
+	[TokenType_QuestionMark]		= "?",
+	[TokenType_Exclamation]			= "!",
+	[TokenType_ExclamationEqual]	= "!=",
+	[TokenType_Plus]				= "+",
+	[TokenType_PlusEqual]			= "+=",
+	[TokenType_Minus]				= "-",
+	[TokenType_MinusEqual]			= "-=",
+	[TokenType_Star]				= "*",
+	[TokenType_StarEqual]			= "*=",
+	[TokenType_ForwardSlash]		= "/",
+	[TokenType_ForwardSlashEqual]	= "/=",
+	[TokenType_Ampersand]			= "&",
+	[TokenType_AmpersandEqual]		= "&=",
+	[TokenType_Pipe]				= "|",
+	[TokenType_PipeEqual]			= "|=",
+	[TokenType_Hat]					= "^",
+	[TokenType_HatEqual]			= "^=",
+	[TokenType_Tilde]				= "~",
+	[TokenType_Percent]				= "%",
+	[TokenType_PercentEqual]		= "%=",
+	[TokenType_Equal]				= "=",
+	[TokenType_EqualEqual]			= "==",
+	[TokenType_Less]				= "<",
+	[TokenType_LessEqual]			= "<=",
+	[TokenType_LessLess]			= "<<",
+	[TokenType_LessLessEqual]		= "<<=",
+	[TokenType_Greater]				= ">",
+	[TokenType_GreaterEqual]		= ">=",
+	[TokenType_GreaterGreater]		= ">>",
+	[TokenType_GreaterGreaterEqual] = ">>=",
+};
+
 void print_tokens(TokenStream* tokens)
 {
-	const char* token_strings[TokenType_Count] = { 0 };
-	token_strings[TokenType_Unknown] = "UNKNOWN";
-	token_strings[TokenType_EOF] = "";
-	token_strings[TokenType_If] = "if";
-	token_strings[TokenType_While] = "while";
-	token_strings[TokenType_For] = "for";
-	token_strings[TokenType_Return] = "return";
-	token_strings[TokenType_Int] = "int";
-	token_strings[TokenType_OpenParenthesis] = "(";
-	token_strings[TokenType_CloseParenthesis] = ")";
-	token_strings[TokenType_OpenBracket] = "[";
-	token_strings[TokenType_CloseBracket] = "]";
-	token_strings[TokenType_OpenBrace] = "{";
-	token_strings[TokenType_CloseBrace] = "}";
-	token_strings[TokenType_Semicolon] = ";";
-	token_strings[TokenType_Period] = ".";
-	token_strings[TokenType_Comma] = ",";
-	token_strings[TokenType_Colon] = ":";
-	token_strings[TokenType_Hashtag] = "#";
-	token_strings[TokenType_Dollar] = "$";
-	token_strings[TokenType_At] = "@";
-	token_strings[TokenType_QuestionMark] = "?";
-	token_strings[TokenType_Exclamation] = "!";
-	token_strings[TokenType_ExclamationEqual] = "!=";
-	token_strings[TokenType_Plus] = "+";
-	token_strings[TokenType_PlusEqual] = "+=";
-	token_strings[TokenType_Minus] = "-";
-	token_strings[TokenType_MinusEqual] = "-=";
-	token_strings[TokenType_Star] = "*";
-	token_strings[TokenType_StarEqual] = "*=";
-	token_strings[TokenType_ForwardSlash] = "/";
-	token_strings[TokenType_ForwardSlashEqual] = "/=";
-	token_strings[TokenType_Ampersand] = "&";
-	token_strings[TokenType_AmpersandEqual] = "&=";
-	token_strings[TokenType_Pipe] = "|";
-	token_strings[TokenType_PipeEqual] = "|=";
-	token_strings[TokenType_Hat] = "^";
-	token_strings[TokenType_HatEqual] = "^=";
-	token_strings[TokenType_Tilde] = "~";
-	token_strings[TokenType_Percent] = "%";
-	token_strings[TokenType_PercentEqual] = "%=";
-	token_strings[TokenType_Equal] = "=";
-	token_strings[TokenType_EqualEqual] = "==";
-	token_strings[TokenType_Less] = "<";
-	token_strings[TokenType_LessEqual] = "<=";
-	token_strings[TokenType_LessLess] = "<<";
-	token_strings[TokenType_LessLessEqual] = "<<=";
-	token_strings[TokenType_Greater] = ">";
-	token_strings[TokenType_GreaterEqual] = ">=";
-	token_strings[TokenType_GreaterGreater] = ">>";
-	token_strings[TokenType_GreaterGreaterEqual] = ">>=";
-
 	for (u64 i = 0; i < tokens->count; ++i)
 	{
 		Token token = tokens->items[i];
