@@ -85,8 +85,28 @@ static void string_push(String* string, const char* format, ...)
 	} while (0)
 
 
+#if 0
+// Dummy hash map.
+#define HashMap(KeyType, ValueType)													\
+	struct																			\
+	{																				\
+		struct KeyValue																\
+		{																			\
+			KeyType key;															\
+			ValueType value;														\
+		};																			\
+		struct KeyValue dummy;														\
+		DynamicArray(struct KeyValue) items;										\
+	}
 
-
+#define hashmap_insert(map, insert_key, insert_value)								\
+	do																				\
+	{																				\
+		(map)->dummy.key = insert_key;												\
+		(map)->dummy.value = insert_value;											\
+		array_push(&((map)->items), (map)->dummy);									\
+	} while (0)
+#endif
 
 
 
@@ -346,12 +366,31 @@ struct Statement
 typedef struct Statement Statement;
 
 
+struct FunctionParameter
+{
+	String name;
+};
+typedef struct FunctionParameter FunctionParameter;
+
+struct LocalVariable
+{
+	String name;
+	i32 offset_from_rbp;
+};
+typedef struct LocalVariable LocalVariable;
 
 struct Function
 {
 	String name;
+
+	u64 first_parameter;
 	u64 parameter_count;
-	Statement block;
+
+	u64 first_local_variable;
+	u64 local_variable_count;
+	u64 stack_size;
+
+	BlockStatement block;
 };
 typedef struct Function Function;
 
@@ -359,6 +398,8 @@ typedef struct Function Function;
 struct Program
 {
 	DynamicArray(Function) functions;
+	DynamicArray(FunctionParameter) function_parameters;
+	DynamicArray(LocalVariable) local_variables;
 	DynamicArray(Statement) statements;
 	DynamicArray(Expression) expressions;
 

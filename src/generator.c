@@ -3,79 +3,95 @@
 #include <assert.h>
 
 
-struct StackVariable
-{
-	String name;
-	u64 stack_location;
-};
-typedef struct StackVariable StackVariable;
+// https://sonictk.github.io/asm_tutorial/#hello,worldrevisted/callingfunctionsinassembly
 
-struct Stack
+struct LocalVariableSpan
 {
-	u64 stack_ptr;
-
-	StackVariable variables[128];
+	LocalVariable* variables;
 	u64 variable_count;
 };
-typedef struct Stack Stack;
+typedef struct LocalVariableSpan LocalVariableSpan;
 
-static void stack_push(Stack* stack, const char* from, String* assembly)
+static LocalVariable* find_local_variable(LocalVariableSpan local_variables, String name)
 {
-	string_push(assembly, "    push %s\n", from);
-	stack->stack_ptr += 8;
-}
-
-static void stack_pop(Stack* stack, const char* reg, String* assembly)
-{
-	string_push(assembly, "    pop %s\n", reg);
-	stack->stack_ptr -= 8;
-}
-
-static StackVariable* stack_find_variable(Stack* stack, String variable)
-{
-	StackVariable* result = 0;
-	for (u64 i = 0; i < stack->variable_count; ++i)
+	LocalVariable* result = 0;
+	for (u64 i = 0; i < local_variables.variable_count; ++i)
 	{
-		if (string_equal(stack->variables[i].name, variable))
+		if (string_equal(name, local_variables.variables[i].name))
 		{
-			result = &stack->variables[i];
+			result = &local_variables.variables[i];
+			break;
 		}
 	}
+
+	if (!result)
+	{
+		fprintf(stderr, "Undeclared identifier '%.*s'.\n", (i32)name.len, name.str); // Temporary. Should be before generator.
+	}
+
 	return result;
 }
 
-static void generate_expression(Program* program, Expression expression, Stack* stack, String* assembly)
+static void stack_push(const char* from, String* assembly)
+{
+	string_push(assembly, "    push %s\n", from);
+}
+
+static void stack_pop(const char* reg, String* assembly)
+{
+	string_push(assembly, "    pop %s\n", reg);
+}
+
+static void generate_exit(String* assembly)
+{
+	stack_pop("rcx", assembly);
+	string_push(assembly, "    call ExitProcess\n");
+}
+
+static void generate_function_header(String name, u64 stack_size, String* assembly)
+{
+	string_push(assembly,
+		"%.*s:\n"
+		"    push rbp\n"
+		"    mov rbp, rsp\n"
+		"    sub rsp, %d\n",
+		(i32)name.len, name.str, (i32)stack_size);
+}
+
+static void generate_return(String* assembly)
+{
+	string_push(assembly, 
+		"    leave\n"
+		"    ret\n"
+	);
+}
+
+static void generate_expression(Program* program, Expression expression, LocalVariableSpan local_variables, String* assembly)
 {
 	if (expression.type == ExpressionType_Identifier)
 	{
-		StackVariable* variable = stack_find_variable(stack, expression.identifier.str);
-		if (!variable)
-		{
-			fprintf(stderr, "Undeclared identifier '%.*s' (line %d)\n", (i32)expression.identifier.str.len, expression.identifier.str.str, (i32)expression.identifier.line);
-		}
+		LocalVariable* variable = find_local_variable(local_variables, expression.identifier.str);
 		assert(variable);
 
-		i32 offset = (i32)(stack->stack_ptr - variable->stack_location);
-
 		char from[32];
-		snprintf(from, sizeof(from), "QWORD [rsp+%d]", offset);
+		snprintf(from, sizeof(from), "QWORD [rbp-%d]", variable->offset_from_rbp);
 
-		stack_push(stack, from, assembly);
+		stack_push(from, assembly);
 	}
 	else if (expression.type == ExpressionType_IntLiteral)
 	{
 		string_push(assembly, "    mov rax, %.*s\n", (i32)expression.int_literal.str.len, expression.int_literal.str.str);
-		stack_push(stack, "rax", assembly);
+		stack_push("rax", assembly);
 	}
 	else if (expression_is_binary_operation(expression.type))
 	{
 		Expression a = program_get_expression(program, expression.binary.lhs);
 		Expression b = program_get_expression(program, expression.binary.rhs);
-		generate_expression(program, a, stack, assembly);
-		generate_expression(program, b, stack, assembly);
+		generate_expression(program, a, local_variables, assembly);
+		generate_expression(program, b, local_variables, assembly);
 
-		stack_pop(stack, "rbx", assembly);
-		stack_pop(stack, "rax", assembly);
+		stack_pop("rbx", assembly);
+		stack_pop("rax", assembly);
 
 		switch (expression.type)
 		{
@@ -100,14 +116,14 @@ static void generate_expression(Program* program, Expression expression, Stack* 
 			default:							assert(0);
 		}
 
-		stack_push(stack, "rax", assembly);
+		stack_push("rax", assembly);
 	}
 	else if (expression_is_unary_operation(expression.type))
 	{
 		Expression a = program_get_expression(program, expression.unary.expression);
-		generate_expression(program, a, stack, assembly);
+		generate_expression(program, a, local_variables, assembly);
 
-		stack_pop(stack, "rax", assembly);
+		stack_pop("rax", assembly);
 
 		switch (expression.type)
 		{
@@ -117,62 +133,62 @@ static void generate_expression(Program* program, Expression expression, Stack* 
 			default:							assert(0);
 		}
 
-		stack_push(stack, "rax", assembly);
+		stack_push("rax", assembly);
 	}
 }
 
-static void generate_statement(Program* program, Statement statement, Stack* stack, String* assembly)
+static void generate_statement(Program* program, Statement statement, LocalVariableSpan local_variables, String* assembly)
 {
-	if (statement.type == StatementType_VariableAssignment)
+	if (statement.type == StatementType_VariableAssignment || statement.type == StatementType_VariableReassignment)
 	{
 		Token identifier = statement.variable_assignment.identifier;
-		assert(!stack_find_variable(stack, identifier.str));
 
 		Expression expression = program_get_expression(program, statement.variable_assignment.expression);
-		generate_expression(program, expression, stack, assembly);
+		generate_expression(program, expression, local_variables, assembly);
 
-		StackVariable variable = { .name = identifier.str, .stack_location = stack->stack_ptr };
-		stack->variables[stack->variable_count++] = variable;
-	}
-	else if (statement.type == StatementType_VariableReassignment)
-	{
-		Token identifier = statement.variable_assignment.identifier;
-		StackVariable* variable = stack_find_variable(stack, identifier.str);
+		LocalVariable* variable = find_local_variable(local_variables, identifier.str);
 		assert(variable);
 
-		Expression expression = program_get_expression(program, statement.variable_assignment.expression);
-		generate_expression(program, expression, stack, assembly);
-
-		i32 offset = (i32)(stack->stack_ptr - variable->stack_location);
-		string_push(assembly, "    mov [rsp+%d], rax\n", offset);
+		stack_pop("rax", assembly);
+		string_push(assembly, "    mov [rbp-%d], rax\n", variable->offset_from_rbp);
 	}
 	else if (statement.type == StatementType_Return)
 	{
 		Expression expression = program_get_expression(program, statement.ret.expression);
-		generate_expression(program, expression, stack, assembly);
+		generate_expression(program, expression, local_variables, assembly);
 
-		stack_pop(stack, "rcx", assembly);
-		string_push(assembly, "    call ExitProcess\n");
+		stack_pop("rax", assembly);
+		generate_return(assembly);
 	}
 	else if (statement.type == StatementType_Block)
 	{
 		for (u64 i = 0; i < statement.block.statement_count; ++i)
 		{
-			generate_statement(program, program->statements.items[i + statement.block.first_statement], stack, assembly);
+			generate_statement(program, program->statements.items[i + statement.block.first_statement], local_variables, assembly);
 		}
 	}
 }
 
 static void generate_function(Program* program, Function function, String* assembly)
 {
-	Stack stack = { 0 };
+	generate_function_header(function.name, function.stack_size, assembly);
 
-	string_push(assembly,
-		"%.*s:\n",
-		(i32)function.name.len, function.name.str
-	);
+	LocalVariableSpan local_variables = { .variables = program->local_variables.items + function.first_local_variable, .variable_count = function.local_variable_count };
 
-	generate_statement(program, function.block, &stack, assembly);
+	Statement statement = { .type = StatementType_Block, .block = function.block };
+	generate_statement(program, statement, local_variables, assembly);
+
+	generate_return(assembly);
+
+	string_push(assembly, "\n");
+}
+
+static void generate_start_function(String* assembly)
+{
+	generate_function_header(string_from_cstr("__main"), 0, assembly);
+	string_push(assembly, "    call main\n");
+	stack_push("rax", assembly);
+	generate_exit(assembly);
 }
 
 String generate(Program program)
@@ -185,7 +201,7 @@ String generate(Program program)
 		"default rel\n"
 		"\n"
 		"segment .text\n"
-		"global main\n"
+		"global __main\n"
 		"extern ExitProcess\n"
 		"\n"
 	);
@@ -195,6 +211,8 @@ String generate(Program program)
 		Function function = program.functions.items[i];
 		generate_function(&program, function, &assembly);
 	}
+
+	generate_start_function(&assembly);
 
 	return assembly;
 }

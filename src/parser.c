@@ -332,12 +332,13 @@ static Statement parse_statement(ParseContext* context, Program* program)
 	return statement;
 }
 
-static b32 parse_function_parameters(ParseContext* context, Function* function)
+static b32 parse_function_parameters(ParseContext* context, Function* function, Program* program)
 {
 	Token token = context_consume(context);
 
 	if (token.type == TokenType_OpenParenthesis)
 	{
+		u64 first_parameter = program->function_parameters.count;
 		while (context_peek_type(context) != TokenType_CloseParenthesis && context_peek_type(context) != TokenType_EOF)
 		{
 			if (!context_expect(context, TokenType_I64))
@@ -352,19 +353,28 @@ static b32 parse_function_parameters(ParseContext* context, Function* function)
 			}
 			Token identifier = context_consume(context);
 
+			FunctionParameter parameter = { .name = identifier.str };
+			array_push(&program->function_parameters, parameter);
+
 			if (context_peek_type(context) == TokenType_Comma)
 			{
 				context_advance(context);
 			}
 		}
 
-		if (context_expect(context, TokenType_CloseParenthesis))
+		if (!context_expect(context, TokenType_CloseParenthesis))
 		{
-			context_advance(context);
+			return false;
 		}
+
+		context_advance(context);
+		function->first_parameter = first_parameter;
+		function->parameter_count = program->function_parameters.count - first_parameter;
+
+		return true;
 	}
 
-	return true;
+	return false;
 }
 
 static b32 parse_function_return_types(ParseContext* context, Function* function)
@@ -391,16 +401,43 @@ static b32 parse_function_return_types(ParseContext* context, Function* function
 		{
 			context_advance(context);
 		}
+
+		return true;
 	}
 
-	return true;
+	return false;
+}
+
+static u64 collect_local_variables(Program* program, Statement statement, i32* offset_from_rbp)
+{
+	u64 result = 0;
+
+	if (statement.type == StatementType_VariableAssignment)
+	{
+		Token identifier = statement.variable_assignment.identifier;
+
+		*offset_from_rbp += 8; // Increment first!
+
+		LocalVariable variable = { .name = identifier.str, .offset_from_rbp = *offset_from_rbp };
+		array_push(&program->local_variables, variable);
+		++result;
+	}
+	else if (statement.type == StatementType_Block)
+	{
+		for (u64 i = 0; i < statement.block.statement_count; ++i)
+		{
+			result += collect_local_variables(program, program->statements.items[i + statement.block.first_statement], offset_from_rbp);
+		}
+	}
+	
+	return result;
 }
 
 static b32 parse_function(ParseContext* context, Program* program)
 {
 	Function function = { 0 };
 
-	if (!parse_function_parameters(context, &function))
+	if (!parse_function_parameters(context, &function, program))
 	{
 		return false;
 	}
@@ -425,7 +462,19 @@ static b32 parse_function(ParseContext* context, Program* program)
 		context_advance(context);
 	}
 
-	function.block = parse_statement(context, program);
+	Statement statement = parse_statement(context, program);
+	if (statement.type != StatementType_Block)
+	{
+		fprintf(stderr, "Expected block for function '%.*s'.\n", (i32)function.name.len, function.name.str);
+		return false;
+	}
+
+	i32 offset_from_rbp = 0;
+	function.first_local_variable = program->local_variables.count;
+	function.local_variable_count = collect_local_variables(program, statement, &offset_from_rbp);
+	function.stack_size = offset_from_rbp;
+
+	function.block = statement.block;
 
 	array_push(&program->functions, function);
 
@@ -454,6 +503,9 @@ Program parse(TokenStream stream)
 
 void free_program(Program* program)
 {
+	array_free(&program->functions);
+	array_free(&program->function_parameters);
+	array_free(&program->local_variables);
 	array_free(&program->statements);
 	array_free(&program->expressions);
 }
@@ -576,7 +628,9 @@ static void print_statement(Program* program, Statement statement, i32 indent)
 static void print_function(Program* program, Function function)
 {
 	printf("FUNCTION %.*s\n", (i32)function.name.len, function.name.str);
-	print_statement(program, function.block, 1);
+
+	Statement statement = { .type = StatementType_Block, .block = function.block };
+	print_statement(program, statement, 1);
 	printf("\n");
 }
 
