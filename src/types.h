@@ -22,6 +22,8 @@ typedef double f64;
 
 typedef u32 b32;
 
+#define true 1
+#define false 0
 
 
 struct String
@@ -299,12 +301,14 @@ struct Expression
 };
 typedef struct Expression Expression;
 
+
 enum StatementType
 {
 	StatementType_Error,
 	StatementType_VariableAssignment,
 	StatementType_VariableReassignment,
 	StatementType_Return,
+	StatementType_Block,
 };
 typedef enum StatementType StatementType;
 
@@ -321,6 +325,13 @@ struct ReturnStatement
 };
 typedef struct ReturnStatement ReturnStatement;
 
+struct BlockStatement
+{
+	u64 first_statement;
+	u64 statement_count;
+};
+typedef struct BlockStatement BlockStatement;
+
 struct Statement
 {
 	StatementType type;
@@ -329,13 +340,25 @@ struct Statement
 	{
 		VariableAssignmentStatement variable_assignment;
 		ReturnStatement ret;
+		BlockStatement block;
 	};
 };
 typedef struct Statement Statement;
 
 
+
+struct Function
+{
+	String name;
+	u64 parameter_count;
+	Statement block;
+};
+typedef struct Function Function;
+
+
 struct Program
 {
+	DynamicArray(Function) functions;
 	DynamicArray(Statement) statements;
 	DynamicArray(Expression) expressions;
 

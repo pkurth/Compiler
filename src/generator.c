@@ -21,13 +21,13 @@ typedef struct Stack Stack;
 
 static void stack_push(Stack* stack, const char* from, String* assembly)
 {
-	string_push(assembly, "push %s\n", from);
+	string_push(assembly, "    push %s\n", from);
 	stack->stack_ptr += 8;
 }
 
 static void stack_pop(Stack* stack, const char* reg, String* assembly)
 {
-	string_push(assembly, "pop %s\n", reg);
+	string_push(assembly, "    pop %s\n", reg);
 	stack->stack_ptr -= 8;
 }
 
@@ -44,24 +44,6 @@ static StackVariable* stack_find_variable(Stack* stack, String variable)
 	return result;
 }
 
-static void register_load_literal(String literal, const char* reg, String* assembly)
-{
-	string_push(assembly,
-		"mov %s, %.*s\n",
-		reg,
-		(i32)literal.len, literal.str
-	);
-}
-
-static void generate_exit(const char* result, String* assembly)
-{
-	string_push(assembly,
-		"mov ecx, %s\n"
-		"call exit\n",
-		result
-	);
-}
-
 static void generate_expression(Program* program, Expression expression, Stack* stack, String* assembly)
 {
 	if (expression.type == ExpressionType_Identifier)
@@ -76,13 +58,13 @@ static void generate_expression(Program* program, Expression expression, Stack* 
 		i32 offset = (i32)(stack->stack_ptr - variable->stack_location);
 
 		char from[32];
-		snprintf(from, sizeof(from), "[rsp+%d]", offset);
+		snprintf(from, sizeof(from), "QWORD [rsp+%d]", offset);
 
 		stack_push(stack, from, assembly);
 	}
 	else if (expression.type == ExpressionType_IntLiteral)
 	{
-		register_load_literal(expression.int_literal.str, "rax", assembly);
+		string_push(assembly, "    mov rax, %.*s\n", (i32)expression.int_literal.str.len, expression.int_literal.str.str);
 		stack_push(stack, "rax", assembly);
 	}
 	else if (expression_is_binary_operation(expression.type))
@@ -99,22 +81,22 @@ static void generate_expression(Program* program, Expression expression, Stack* 
 		{
 			case ExpressionType_LogicalOr:		break;
 			case ExpressionType_LogicalAnd:		break;
-			case ExpressionType_BitwiseOr:		string_push(assembly, "or rax, rbx\n"); break; // https://www.felixcloutier.com/x86/or
-			case ExpressionType_BitwiseXor:		string_push(assembly, "xor rax, rbx\n"); break; // https://www.felixcloutier.com/x86/xor
-			case ExpressionType_BitwiseAnd:		string_push(assembly, "and rax, rbx\n"); break; // https://www.felixcloutier.com/x86/and
-			case ExpressionType_Equal:			string_push(assembly, "cmp rax, rbx\nsete al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
-			case ExpressionType_NotEqual:		string_push(assembly, "cmp rax, rbx\nsetne al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
-			case ExpressionType_Less:			string_push(assembly, "cmp rax, rbx\nsetl al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
-			case ExpressionType_Greater:		string_push(assembly, "cmp rax, rbx\nsetg al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
-			case ExpressionType_LessEqual:		string_push(assembly, "cmp rax, rbx\nsetle al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
-			case ExpressionType_GreaterEqual:	string_push(assembly, "cmp rax, rbx\nsetge al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
-			case ExpressionType_LeftShift:		string_push(assembly, "shlx rax, rax, rbx\n"); break; // https://www.felixcloutier.com/x86/sarx:shlx:shrx
-			case ExpressionType_RightShift:		string_push(assembly, "shrx rax, rax, rbx\n"); break; // https://www.felixcloutier.com/x86/sarx:shlx:shrx
-			case ExpressionType_Addition:		string_push(assembly, "add rax, rbx\n"); break; // https://www.felixcloutier.com/x86/add
-			case ExpressionType_Subtraction:	string_push(assembly, "sub rax, rbx\n"); break; // https://www.felixcloutier.com/x86/sub
-			case ExpressionType_Multiplication: string_push(assembly, "imul rax, rbx\n"); break; // https://www.felixcloutier.com/x86/imul
-			case ExpressionType_Division:		string_push(assembly, "cqo\nidiv rbx\n"); break; // https://www.felixcloutier.com/x86/idiv
-			case ExpressionType_Modulo:			string_push(assembly, "cqo\nidiv rbx\nmov rax, rdx\n"); break; // https://www.felixcloutier.com/x86/idiv
+			case ExpressionType_BitwiseOr:		string_push(assembly, "    or rax, rbx\n"); break; // https://www.felixcloutier.com/x86/or
+			case ExpressionType_BitwiseXor:		string_push(assembly, "    xor rax, rbx\n"); break; // https://www.felixcloutier.com/x86/xor
+			case ExpressionType_BitwiseAnd:		string_push(assembly, "    and rax, rbx\n"); break; // https://www.felixcloutier.com/x86/and
+			case ExpressionType_Equal:			string_push(assembly, "    cmp rax, rbx\n    sete al\n    movzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			case ExpressionType_NotEqual:		string_push(assembly, "    cmp rax, rbx\n    setne al\n    movzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			case ExpressionType_Less:			string_push(assembly, "    cmp rax, rbx\n    setl al\n    movzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			case ExpressionType_Greater:		string_push(assembly, "    cmp rax, rbx\n    setg al\n    movzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			case ExpressionType_LessEqual:		string_push(assembly, "    cmp rax, rbx\n    setle al\n    movzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			case ExpressionType_GreaterEqual:	string_push(assembly, "    cmp rax, rbx\n    setge al\n    movzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			case ExpressionType_LeftShift:		string_push(assembly, "    shlx rax, rax, rbx\n"); break; // https://www.felixcloutier.com/x86/sarx:shlx:shrx
+			case ExpressionType_RightShift:		string_push(assembly, "    shrx rax, rax, rbx\n"); break; // https://www.felixcloutier.com/x86/sarx:shlx:shrx
+			case ExpressionType_Addition:		string_push(assembly, "    add rax, rbx\n"); break; // https://www.felixcloutier.com/x86/add
+			case ExpressionType_Subtraction:	string_push(assembly, "    sub rax, rbx\n"); break; // https://www.felixcloutier.com/x86/sub
+			case ExpressionType_Multiplication: string_push(assembly, "    imul rax, rbx\n"); break; // https://www.felixcloutier.com/x86/imul
+			case ExpressionType_Division:		string_push(assembly, "    cqo\n    idiv rbx\n"); break; // https://www.felixcloutier.com/x86/idiv
+			case ExpressionType_Modulo:			string_push(assembly, "    cqo\n    idiv rbx\n    mov rax, rdx\n"); break; // https://www.felixcloutier.com/x86/idiv
 			default:							assert(0);
 		}
 
@@ -129,9 +111,9 @@ static void generate_expression(Program* program, Expression expression, Stack* 
 
 		switch (expression.type)
 		{
-			case ExpressionType_Negate:			string_push(assembly, "neg rax\n"); break; // https://www.felixcloutier.com/x86/neg
-			case ExpressionType_BitwiseNot:		string_push(assembly, "not rax\n"); break; // https://www.felixcloutier.com/x86/not
-			case ExpressionType_Not:			string_push(assembly, "cmp rax, 0\nsete al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
+			case ExpressionType_Negate:			string_push(assembly, "    neg rax\n"); break; // https://www.felixcloutier.com/x86/neg
+			case ExpressionType_BitwiseNot:		string_push(assembly, "    not rax\n"); break; // https://www.felixcloutier.com/x86/not
+			case ExpressionType_Not:			string_push(assembly, "    cmp rax, 0\nsete al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
 			default:							assert(0);
 		}
 
@@ -162,47 +144,58 @@ static void generate_statement(Program* program, Statement statement, Stack* sta
 		generate_expression(program, expression, stack, assembly);
 
 		i32 offset = (i32)(stack->stack_ptr - variable->stack_location);
-		string_push(assembly, "mov [rsp+%d], rax\n", offset);
+		string_push(assembly, "    mov [rsp+%d], rax\n", offset);
 	}
 	else if (statement.type == StatementType_Return)
 	{
 		Expression expression = program_get_expression(program, statement.ret.expression);
 		generate_expression(program, expression, stack, assembly);
 
-		stack_pop(stack, "rax", assembly);
-		generate_exit("eax", assembly);
+		stack_pop(stack, "rcx", assembly);
+		string_push(assembly, "    call ExitProcess\n");
 	}
+	else if (statement.type == StatementType_Block)
+	{
+		for (u64 i = 0; i < statement.block.statement_count; ++i)
+		{
+			generate_statement(program, program->statements.items[i + statement.block.first_statement], stack, assembly);
+		}
+	}
+}
+
+static void generate_function(Program* program, Function function, String* assembly)
+{
+	Stack stack = { 0 };
+
+	string_push(assembly,
+		"%.*s:\n",
+		(i32)function.name.len, function.name.str
+	);
+
+	generate_statement(program, function.block, &stack, assembly);
 }
 
 String generate(Program program)
 {
 	u64 max_len = 1024 * 10;
 	String assembly = { malloc(max_len), 0 };
-	Stack stack = { 0 };
 
 	string_push(&assembly,
-		"includelib ucrt.lib\n"
+		"bits 64\n"
+		"default rel\n"
 		"\n"
-		".code\n"
-		"externdef exit : proc\n"
+		"segment .text\n"
+		"global main\n"
+		"extern ExitProcess\n"
 		"\n"
-		"main proc\n"
 	);
 
-
-	for (u64 i = 0; i < program.statements.count; ++i)
+	for (u64 i = 0; i < program.functions.count; ++i)
 	{
-		Statement statement = program.statements.items[i];
-		generate_statement(&program, statement, &stack, &assembly);
+		Function function = program.functions.items[i];
+		generate_function(&program, function, &assembly);
 	}
-
-	generate_exit("0", &assembly); // In case program didn't have return statement.
-
-	string_push(&assembly,
-		"main endp\n"
-		"\n"
-		"end\n"
-	);
 
 	return assembly;
 }
+

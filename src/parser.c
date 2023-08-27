@@ -293,6 +293,23 @@ static Statement parse_statement(ParseContext* context, Program* program)
 			}
 		}
 	}
+	else if (token.type == TokenType_OpenBrace)
+	{
+		u64 first_statement = program->statements.count;
+		while (context_expect_not_eof(context) && context_peek_type(context) != TokenType_CloseBrace)
+		{
+			parse_statement(context, program);
+		}
+
+		if (context_expect(context, TokenType_CloseBrace))
+		{
+			context_advance(context);
+
+			statement.type = StatementType_Block;
+			statement.block.first_statement = first_statement;
+			statement.block.statement_count = program->statements.count - first_statement;
+		}
+	}
 	else
 	{
 		fprintf(stderr, "LINE %d: Unexpected token '%.*s'.\n", (i32)token.line, (i32)token.str.len, token.str.str);
@@ -311,7 +328,108 @@ static Statement parse_statement(ParseContext* context, Program* program)
 		}
 	}
 
+	array_push(&program->statements, statement);
 	return statement;
+}
+
+static b32 parse_function_parameters(ParseContext* context, Function* function)
+{
+	Token token = context_consume(context);
+
+	if (token.type == TokenType_OpenParenthesis)
+	{
+		while (context_peek_type(context) != TokenType_CloseParenthesis && context_peek_type(context) != TokenType_EOF)
+		{
+			if (!context_expect(context, TokenType_I64))
+			{
+				return false;
+			}
+			context_advance(context);
+
+			if (!context_expect(context, TokenType_Identifier))
+			{
+				return false;
+			}
+			Token identifier = context_consume(context);
+
+			if (context_peek_type(context) == TokenType_Comma)
+			{
+				context_advance(context);
+			}
+		}
+
+		if (context_expect(context, TokenType_CloseParenthesis))
+		{
+			context_advance(context);
+		}
+	}
+
+	return true;
+}
+
+static b32 parse_function_return_types(ParseContext* context, Function* function)
+{
+	Token token = context_consume(context);
+
+	if (token.type == TokenType_OpenParenthesis)
+	{
+		while (context_peek_type(context) != TokenType_CloseParenthesis && context_peek_type(context) != TokenType_EOF)
+		{
+			if (!context_expect(context, TokenType_I64))
+			{
+				return false;
+			}
+			context_advance(context);
+
+			if (context_peek_type(context) == TokenType_Comma)
+			{
+				context_advance(context);
+			}
+		}
+
+		if (context_expect(context, TokenType_CloseParenthesis))
+		{
+			context_advance(context);
+		}
+	}
+
+	return true;
+}
+
+static b32 parse_function(ParseContext* context, Program* program)
+{
+	Function function = { 0 };
+
+	if (!parse_function_parameters(context, &function))
+	{
+		return false;
+	}
+	
+	if (context_expect(context, TokenType_Arrow))
+	{
+		context_advance(context);
+	}
+
+	if (!parse_function_return_types(context, &function))
+	{
+		return false;
+	}
+
+	if (context_expect(context, TokenType_Identifier))
+	{
+		function.name = context_consume(context).str;
+	}
+
+	if (context_expect(context, TokenType_Equal))
+	{
+		context_advance(context);
+	}
+
+	function.block = parse_statement(context, program);
+
+	array_push(&program->functions, function);
+
+	return true;
 }
 
 Program parse(TokenStream stream)
@@ -325,15 +443,8 @@ Program parse(TokenStream stream)
 
 	while (context_peek_type(&context) != TokenType_EOF)
 	{
-		Statement statement = parse_statement(&context, &program);
-		if (statement.type != StatementType_Error)
-		{
-			array_push(&program.statements, statement);
-		}
-		else
-		{
-			has_errors = 1;
-		}
+		b32 success = parse_function(&context, &program);
+		has_errors |= !success;
 	}
 
 	program.has_errors = has_errors;
@@ -422,29 +533,57 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 	*active_mask &= ~(1 << indent);
 }
 
+static void print_statement(Program* program, Statement statement, i32 indent)
+{
+	for (i32 i = 0; i < indent; ++i)
+	{
+		printf("   ");
+	}
+
+	if (statement.type == ExpressionType_Error)
+	{
+		return;
+	}
+
+	i32 active_mask = 0;
+
+	if (statement.type == StatementType_VariableAssignment || statement.type == StatementType_VariableReassignment)
+	{
+		Token identifier = statement.variable_assignment.identifier;
+
+		printf("* Variable assignment %.*s\n", (i32)identifier.str.len, identifier.str.str);
+		print_expression(program, statement.variable_assignment.expression, indent + 1, &active_mask);
+	}
+	else if (statement.type == StatementType_Return)
+	{
+		printf("* Return\n");
+		print_expression(program, statement.ret.expression, indent + 1, &active_mask);
+	}
+	else if (statement.type == StatementType_Block)
+	{
+		printf("* BLOCK\n");
+		for (u64 i = 0; i < statement.block.statement_count; ++i)
+		{
+			print_statement(program, program->statements.items[i + statement.block.first_statement], indent + 1);
+		}
+	}
+	else
+	{
+		assert(!"Unknown statement type");
+	}
+}
+
+static void print_function(Program* program, Function function)
+{
+	printf("FUNCTION %.*s\n", (i32)function.name.len, function.name.str);
+	print_statement(program, function.block, 1);
+	printf("\n");
+}
+
 void print_program(Program* program)
 {
-	for (u64 i = 0; i < program->statements.count; ++i)
+	for (u64 i = 0; i < program->functions.count; ++i)
 	{
-		Statement statement = program->statements.items[i];
-
-		i32 active_mask = 0;
-
-		if (statement.type == StatementType_VariableAssignment || statement.type == StatementType_VariableReassignment)
-		{
-			Token identifier = statement.variable_assignment.identifier;
-
-			printf("* Variable assignment %.*s\n", (i32)identifier.str.len, identifier.str.str);
-			print_expression(program, statement.variable_assignment.expression, 1, &active_mask);
-		}
-		else if (statement.type == StatementType_Return)
-		{
-			printf("* Return\n");
-			print_expression(program, statement.ret.expression, 1, &active_mask);
-		}
-		else
-		{
-			assert(!"Unknown statement type");
-		}
+		print_function(program, program->functions.items[i]);
 	}
 }

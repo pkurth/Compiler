@@ -5,11 +5,13 @@
 //	return x * x;
 //}
 
-i64 a = 7; // comment
-i64 b = 4 + a * 3 + -(22 + 1);
-b <<= 2;
-// comment
-i64 c = 33 >= 10;
+() -> (i64) main =
+{
+	i64 a = 7; // comment
+	i64 b = 4 + a * 3 + -(22 + 1);
+	b <<= 2;
+	// comment
+	i64 c = 33 >= 10;
 
-return b;
-
+	return b;
+}

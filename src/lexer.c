@@ -228,6 +228,7 @@ static const char* token_strings[TokenType_Count] =
 	[TokenType_GreaterEqual]		= ">=",
 	[TokenType_GreaterGreater]		= ">>",
 	[TokenType_GreaterGreaterEqual] = ">>=",
+	[TokenType_Arrow]				= "->",
 };
 
 const char* token_type_to_string(TokenType type)
