@@ -204,7 +204,7 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 	return lhs;
 }
 
-static Statement parse_statement(ParseContext* context, Program* program)
+static void parse_statement(ParseContext* context, Program* program)
 {
 	Statement statement = { .type = StatementType_Error };
 
@@ -295,20 +295,25 @@ static Statement parse_statement(ParseContext* context, Program* program)
 	}
 	else if (token.type == TokenType_OpenBrace)
 	{
+		u64 block_index = program->statements.count;
+		statement.type = StatementType_Block;
+		array_push(&program->statements, statement);
+
 		u64 first_statement = program->statements.count;
+
 		while (context_expect_not_eof(context) && context_peek_type(context) != TokenType_CloseBrace)
 		{
 			parse_statement(context, program);
 		}
 
+		program->statements.items[block_index].block.statement_count = program->statements.count - first_statement;
+
 		if (context_expect(context, TokenType_CloseBrace))
 		{
 			context_advance(context);
-
-			statement.type = StatementType_Block;
-			statement.block.first_statement = first_statement;
-			statement.block.statement_count = program->statements.count - first_statement;
 		}
+
+		return;
 	}
 	else
 	{
@@ -329,7 +334,6 @@ static Statement parse_statement(ParseContext* context, Program* program)
 	}
 
 	array_push(&program->statements, statement);
-	return statement;
 }
 
 static b32 parse_function_parameters(ParseContext* context, Function* function, Program* program)
@@ -408,29 +412,44 @@ static b32 parse_function_return_types(ParseContext* context, Function* function
 	return false;
 }
 
-static u64 collect_local_variables(Program* program, Statement statement, i32* offset_from_rbp)
+
+struct StackInfo
 {
-	u64 result = 0;
+	i32 stack_size;
+	i32 current_offset_from_frame_pointer;
+};
+typedef struct StackInfo StackInfo;
 
-	if (statement.type == StatementType_VariableAssignment)
+static void collect_local_variables(Program* program, u64 first_statement, u64 statement_count, StackInfo* info)
+{
+	for (u64 i = 0; i < statement_count; ++i)
 	{
-		Token identifier = statement.variable_assignment.identifier;
+		u64 j = i + first_statement;
 
-		*offset_from_rbp += 8; // Increment first!
+		Statement statement = program->statements.items[j];
 
-		LocalVariable variable = { .name = identifier.str, .offset_from_rbp = *offset_from_rbp };
-		array_push(&program->local_variables, variable);
-		++result;
-	}
-	else if (statement.type == StatementType_Block)
-	{
-		for (u64 i = 0; i < statement.block.statement_count; ++i)
+		if (statement.type == StatementType_VariableAssignment)
 		{
-			result += collect_local_variables(program, program->statements.items[i + statement.block.first_statement], offset_from_rbp);
+			Token identifier = statement.variable_assignment.identifier;
+
+			info->current_offset_from_frame_pointer += 8; // Increment first!
+			info->stack_size = max(info->stack_size, info->current_offset_from_frame_pointer);
+
+			LocalVariable variable = { .name = identifier.str, .offset_from_frame_pointer = info->current_offset_from_frame_pointer };
+			array_push(&program->local_variables, variable);
+		}
+		else if (statement.type == StatementType_Block)
+		{
+			i32 offset = info->current_offset_from_frame_pointer;
+
+			assert(i + statement.block.statement_count <= statement_count);
+
+			collect_local_variables(program, j + 1, statement.block.statement_count, info);
+			i += statement.block.statement_count;
+
+			info->current_offset_from_frame_pointer = offset;
 		}
 	}
-	
-	return result;
 }
 
 static b32 parse_function(ParseContext* context, Program* program)
@@ -462,19 +481,17 @@ static b32 parse_function(ParseContext* context, Program* program)
 		context_advance(context);
 	}
 
-	Statement statement = parse_statement(context, program);
-	if (statement.type != StatementType_Block)
-	{
-		fprintf(stderr, "Expected block for function '%.*s'.\n", (i32)function.name.len, function.name.str);
-		return false;
-	}
+	function.first_statement = program->statements.count;
 
-	i32 offset_from_rbp = 0;
+	parse_statement(context, program);
+
+	function.statement_count = program->statements.count - function.first_statement;
+
+	StackInfo info = { 0 };
 	function.first_local_variable = program->local_variables.count;
-	function.local_variable_count = collect_local_variables(program, statement, &offset_from_rbp);
-	function.stack_size = offset_from_rbp;
-
-	function.block = statement.block;
+	collect_local_variables(program, function.first_statement, function.statement_count, &info);
+	function.local_variable_count = program->local_variables.count - function.first_local_variable;
+	function.stack_size = info.stack_size;
 
 	array_push(&program->functions, function);
 
@@ -585,43 +602,48 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 	*active_mask &= ~(1 << indent);
 }
 
-static void print_statement(Program* program, Statement statement, i32 indent)
+static void print_statements(Program* program, u64 first_statement, u64 statement_count, i32 indent)
 {
-	for (i32 i = 0; i < indent; ++i)
+	for (u64 i = 0; i < statement_count; ++i)
 	{
-		printf("   ");
-	}
+		u64 j = i + first_statement;
 
-	if (statement.type == ExpressionType_Error)
-	{
-		return;
-	}
+		Statement statement = program->statements.items[j];
 
-	i32 active_mask = 0;
-
-	if (statement.type == StatementType_VariableAssignment || statement.type == StatementType_VariableReassignment)
-	{
-		Token identifier = statement.variable_assignment.identifier;
-
-		printf("* Variable assignment %.*s\n", (i32)identifier.str.len, identifier.str.str);
-		print_expression(program, statement.variable_assignment.expression, indent + 1, &active_mask);
-	}
-	else if (statement.type == StatementType_Return)
-	{
-		printf("* Return\n");
-		print_expression(program, statement.ret.expression, indent + 1, &active_mask);
-	}
-	else if (statement.type == StatementType_Block)
-	{
-		printf("* BLOCK\n");
-		for (u64 i = 0; i < statement.block.statement_count; ++i)
+		for (i32 i = 0; i < indent; ++i)
 		{
-			print_statement(program, program->statements.items[i + statement.block.first_statement], indent + 1);
+			printf("   ");
 		}
-	}
-	else
-	{
-		assert(!"Unknown statement type");
+
+		i32 active_mask = 0;
+
+		if (statement.type == ExpressionType_Error)
+		{
+			continue;
+		}
+
+		if (statement.type == StatementType_VariableAssignment || statement.type == StatementType_VariableReassignment)
+		{
+			Token identifier = statement.variable_assignment.identifier;
+
+			printf("* Variable assignment %.*s\n", (i32)identifier.str.len, identifier.str.str);
+			print_expression(program, statement.variable_assignment.expression, indent + 1, &active_mask);
+		}
+		else if (statement.type == StatementType_Return)
+		{
+			printf("* Return\n");
+			print_expression(program, statement.ret.expression, indent + 1, &active_mask);
+		}
+		else if (statement.type == StatementType_Block)
+		{
+			printf("* BLOCK\n");
+			print_statements(program, j + 1, statement.block.statement_count, indent + 1);
+			i += statement.block.statement_count;
+		}
+		else
+		{
+			assert(!"Unknown statement type");
+		}
 	}
 }
 
@@ -629,8 +651,7 @@ static void print_function(Program* program, Function function)
 {
 	printf("FUNCTION %.*s\n", (i32)function.name.len, function.name.str);
 
-	Statement statement = { .type = StatementType_Block, .block = function.block };
-	print_statement(program, statement, 1);
+	print_statements(program, function.first_statement, function.statement_count, 1);
 	printf("\n");
 }
 

@@ -74,7 +74,7 @@ static void generate_expression(Program* program, Expression expression, LocalVa
 		assert(variable);
 
 		char from[32];
-		snprintf(from, sizeof(from), "QWORD [rbp-%d]", variable->offset_from_rbp);
+		snprintf(from, sizeof(from), "QWORD [rbp-%d]", variable->offset_from_frame_pointer);
 
 		stack_push(from, assembly);
 	}
@@ -137,34 +137,39 @@ static void generate_expression(Program* program, Expression expression, LocalVa
 	}
 }
 
-static void generate_statement(Program* program, Statement statement, LocalVariableSpan local_variables, String* assembly)
+static void generate_statements(Program* program, u64 first_statement, u64 statement_count, LocalVariableSpan local_variables, String* assembly)
 {
-	if (statement.type == StatementType_VariableAssignment || statement.type == StatementType_VariableReassignment)
+	for (u64 i = 0; i < statement_count; ++i)
 	{
-		Token identifier = statement.variable_assignment.identifier;
+		u64 j = i + first_statement;
 
-		Expression expression = program_get_expression(program, statement.variable_assignment.expression);
-		generate_expression(program, expression, local_variables, assembly);
+		Statement statement = program->statements.items[j];
 
-		LocalVariable* variable = find_local_variable(local_variables, identifier.str);
-		assert(variable);
-
-		stack_pop("rax", assembly);
-		string_push(assembly, "    mov [rbp-%d], rax\n", variable->offset_from_rbp);
-	}
-	else if (statement.type == StatementType_Return)
-	{
-		Expression expression = program_get_expression(program, statement.ret.expression);
-		generate_expression(program, expression, local_variables, assembly);
-
-		stack_pop("rax", assembly);
-		generate_return(assembly);
-	}
-	else if (statement.type == StatementType_Block)
-	{
-		for (u64 i = 0; i < statement.block.statement_count; ++i)
+		if (statement.type == StatementType_VariableAssignment || statement.type == StatementType_VariableReassignment)
 		{
-			generate_statement(program, program->statements.items[i + statement.block.first_statement], local_variables, assembly);
+			Token identifier = statement.variable_assignment.identifier;
+
+			Expression expression = program_get_expression(program, statement.variable_assignment.expression);
+			generate_expression(program, expression, local_variables, assembly);
+
+			LocalVariable* variable = find_local_variable(local_variables, identifier.str);
+			assert(variable);
+
+			stack_pop("rax", assembly);
+			string_push(assembly, "    mov [rbp-%d], rax\n", variable->offset_from_frame_pointer);
+		}
+		else if (statement.type == StatementType_Return)
+		{
+			Expression expression = program_get_expression(program, statement.ret.expression);
+			generate_expression(program, expression, local_variables, assembly);
+
+			stack_pop("rax", assembly);
+			generate_return(assembly);
+		}
+		else if (statement.type == StatementType_Block)
+		{
+			generate_statements(program, j + 1, statement.block.statement_count, local_variables, assembly);
+			i += statement.block.statement_count;
 		}
 	}
 }
@@ -175,10 +180,7 @@ static void generate_function(Program* program, Function function, String* assem
 
 	LocalVariableSpan local_variables = { .variables = program->local_variables.items + function.first_local_variable, .variable_count = function.local_variable_count };
 
-	Statement statement = { .type = StatementType_Block, .block = function.block };
-	generate_statement(program, statement, local_variables, assembly);
-
-	generate_return(assembly);
+	generate_statements(program, function.first_statement, function.statement_count, local_variables, assembly);
 
 	string_push(assembly, "\n");
 }

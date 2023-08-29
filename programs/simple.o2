@@ -1,14 +1,19 @@
 
 
-//(i64 x) -> (i64) square =
-//{
-//	return x * x;
-//}
+(i64 x) -> (i64) square =
+{
+	return 2 * 2;
+}
 
 () -> (i64) main =
 {
 	i64 a = 7; // comment
 	i64 b = 4 + a * 3 + -(22 + 1);
+	
+	{
+		i64 d = 24 * a;
+	}
+	
 	b <<= 2;
 	// comment
 	i64 c = 33 >= 10;

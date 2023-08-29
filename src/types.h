@@ -347,7 +347,6 @@ typedef struct ReturnStatement ReturnStatement;
 
 struct BlockStatement
 {
-	u64 first_statement;
 	u64 statement_count;
 };
 typedef struct BlockStatement BlockStatement;
@@ -375,7 +374,7 @@ typedef struct FunctionParameter FunctionParameter;
 struct LocalVariable
 {
 	String name;
-	i32 offset_from_rbp;
+	i32 offset_from_frame_pointer;
 };
 typedef struct LocalVariable LocalVariable;
 
@@ -383,14 +382,15 @@ struct Function
 {
 	String name;
 
+	u64 first_statement;
+	u64 statement_count;
+
 	u64 first_parameter;
 	u64 parameter_count;
 
 	u64 first_local_variable;
 	u64 local_variable_count;
 	u64 stack_size;
-
-	BlockStatement block;
 };
 typedef struct Function Function;
 

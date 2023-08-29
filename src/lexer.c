@@ -255,7 +255,7 @@ void print_tokens(TokenStream* tokens)
 			printf("%s ", token_type_to_string(token.type));
 		}
 		
-		if (token.type == TokenType_Semicolon || token.type == TokenType_EOF)
+		if (token.type == TokenType_EOF || token.type == TokenType_Semicolon || token.type == TokenType_OpenBrace || token.type == TokenType_CloseBrace)
 		{
 			printf("\n");
 		}
