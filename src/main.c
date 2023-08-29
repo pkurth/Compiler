@@ -46,13 +46,64 @@ static void write_file(const char* filename, String s)
 	fclose(f);
 }
 
+static String path_get_parent(String path)
+{
+	while (--path.len)
+	{
+		if (path.str[path.len] == '/' || path.str[path.len] == '\\')
+		{
+			break;
+		}
+	}
+	if (path.len == 0)
+	{
+		path = (String){ .str = ".", .len = 1 };
+	}
+	return path;
+}
+
+static String path_get_filename(String path)
+{
+	String parent = path_get_parent(path);
+	if (!string_equal(parent, string_from_cstr(".")))
+	{
+		path.str += parent.len + 1;
+		path.len -= parent.len + 1;
+	}
+
+	return path;
+}
+
+static String path_get_stem(String path)
+{
+	String filename = path_get_filename(path);
+	
+	String copy = filename;
+	while (--copy.len)
+	{
+		if (copy.str[copy.len] == '.')
+		{
+			return copy;
+		}
+	}
+	return filename;
+}
+
 i32 main(i32 argc, char** argv)
 {
 	if (argc != 3)
 	{
-		fprintf(stderr, "Invalid number of arguments.\nUsage: %s <file.o2> <out.asm>\n", argv[0]);
+		fprintf(stderr, "Invalid number of arguments.\nUsage: %s <file.o2> <out.obj>\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
+
+	String obj_path = { .str = argv[2], strlen(argv[2]) };
+	String obj_dir = path_get_parent(obj_path);
+	String obj_stem = path_get_stem(obj_path);
+
+	char asm_path[128];
+	snprintf(asm_path, sizeof(asm_path), "%.*s/%.*s.asm", (i32)obj_dir.len, obj_dir.str, (i32)obj_stem.len, obj_stem.str);
+
 
 	String contents = read_file(argv[1]);
 
@@ -67,9 +118,20 @@ i32 main(i32 argc, char** argv)
 			print_program(&program);
 
 			String result = generate(program);
-			write_file(argv[2], result);
+			write_file(asm_path, result);
 
 			free_string(&result);
+
+
+			char nasm_command[128] = "";
+
+#if defined(_WIN32)
+			snprintf(nasm_command, sizeof(nasm_command), ".\\nasm\\nasm.exe -f win64 -o %.*s %s", (i32)obj_path.len, obj_path.str, asm_path);
+#elif defined(__linux__)
+
+#endif
+
+			system(nasm_command);
 		}
 
 		free_program(&program);
