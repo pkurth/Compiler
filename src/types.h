@@ -25,11 +25,13 @@ typedef u32 b32;
 #define true 1
 #define false 0
 
+#define arraysize(arr) (i64)(sizeof(arr) / sizeof((arr)[0]))
+
 
 struct String
 {
 	char* str;
-	u64 len;
+	i64 len;
 };
 typedef struct String String;
 
@@ -60,8 +62,8 @@ static void string_push(String* string, const char* format, ...)
 	struct																			\
 	{																				\
 		ItemType* items;															\
-		u64 count;																	\
-		u64 capacity;																\
+		i64 count;																	\
+		i64 capacity;																\
 	}
 
 #define array_push(a, item)															\
@@ -109,6 +111,54 @@ static void string_push(String* string, const char* format, ...)
 #endif
 
 
+enum PrimitiveDatatype
+{
+	PrimitiveDatatype_I8,
+	PrimitiveDatatype_I16,
+	PrimitiveDatatype_I32,
+	PrimitiveDatatype_I64,
+
+	PrimitiveDatatype_U8,
+	PrimitiveDatatype_U16,
+	PrimitiveDatatype_U32,
+	PrimitiveDatatype_U64,
+
+	PrimitiveDatatype_B32,
+
+	PrimitiveDatatype_F32,
+	PrimitiveDatatype_F64,
+
+
+	PrimitiveDatatype_Count,
+};
+typedef enum PrimitiveDatatype PrimitiveDatatype;
+
+struct PrimitiveData
+{
+	PrimitiveDatatype type;
+
+	union
+	{
+		i8 data_i8;
+		i16 data_i16;
+		i32 data_i32;
+		i64 data_i64;
+
+		u8 data_u8;
+		u16 data_u16;
+		u32 data_u32;
+		u64 data_u64;
+
+		b32 data_b32;
+
+		f32 data_f32;
+		f64 data_f64;
+	};
+};
+typedef struct PrimitiveData PrimitiveData;
+
+const char* serialize_primitive_data(PrimitiveData data);
+
 
 
 // https://github.com/stuartcarnie/clang/blob/master/include/clang/Basic/TokenKinds.def
@@ -124,7 +174,17 @@ enum TokenType
 	TokenType_While,
 	TokenType_For,
 	TokenType_Return,
+	TokenType_I8,
+	TokenType_I16,
+	TokenType_I32,
 	TokenType_I64,
+	TokenType_U8,
+	TokenType_U16,
+	TokenType_U32,
+	TokenType_U64,
+	TokenType_B32,
+	TokenType_F32,
+	TokenType_F64,
 
 
 	// Parentheses, brackets, braces.
@@ -187,14 +247,14 @@ enum TokenType
 
 	// Other.
 	TokenType_Identifier,
-	TokenType_IntLiteral,
+	TokenType_NumericLiteral,
 
 
 	TokenType_Count,
 
 
 	TokenType_FirstKeyword = TokenType_If,
-	TokenType_LastKeyword = TokenType_I64,
+	TokenType_LastKeyword = TokenType_F64,
 
 	TokenType_FirstAssignmentOperator = TokenType_Equal,
 	TokenType_LastAssignmentOperator = TokenType_HatEqual,
@@ -230,8 +290,10 @@ const char* token_type_to_string(TokenType type);
 struct Token
 {
 	TokenType type;
+	u32 line;
+
 	String str;
-	u64 line;
+	PrimitiveData data;
 };
 typedef struct Token Token;
 
@@ -246,7 +308,7 @@ typedef DynamicArray(Token) TokenStream;
 
 
 
-typedef u64 ExpressionHandle;
+typedef i64 ExpressionHandle;
 
 enum ExpressionType
 {
@@ -277,7 +339,7 @@ enum ExpressionType
 	ExpressionType_BitwiseNot,
 	ExpressionType_Not,
 
-	ExpressionType_IntLiteral,
+	ExpressionType_NumericLiteral,
 	ExpressionType_Identifier,
 
 	ExpressionType_Count,
@@ -313,8 +375,8 @@ struct Expression
 
 	union
 	{
-		Token int_literal;
-		Token identifier;
+		PrimitiveData literal;
+		String identifier;
 		BinaryExpression binary;
 		UnaryExpression unary;
 	};
@@ -347,7 +409,7 @@ typedef struct ReturnStatement ReturnStatement;
 
 struct BlockStatement
 {
-	u64 statement_count;
+	i64 statement_count;
 };
 typedef struct BlockStatement BlockStatement;
 
@@ -382,15 +444,15 @@ struct Function
 {
 	String name;
 
-	u64 first_statement;
-	u64 statement_count;
+	i64 first_statement;
+	i64 statement_count;
 
-	u64 first_parameter;
-	u64 parameter_count;
+	i64 first_parameter;
+	i64 parameter_count;
 
-	u64 first_local_variable;
-	u64 local_variable_count;
-	u64 stack_size;
+	i64 first_local_variable;
+	i64 local_variable_count;
+	i64 stack_size;
 };
 typedef struct Function Function;
 

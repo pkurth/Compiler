@@ -8,14 +8,14 @@
 struct LocalVariableSpan
 {
 	LocalVariable* variables;
-	u64 variable_count;
+	i64 variable_count;
 };
 typedef struct LocalVariableSpan LocalVariableSpan;
 
 static LocalVariable* find_local_variable(LocalVariableSpan local_variables, String name)
 {
 	LocalVariable* result = 0;
-	for (u64 i = 0; i < local_variables.variable_count; ++i)
+	for (i64 i = 0; i < local_variables.variable_count; ++i)
 	{
 		if (string_equal(name, local_variables.variables[i].name))
 		{
@@ -48,7 +48,7 @@ static void generate_exit(String* assembly)
 	string_push(assembly, "    call ExitProcess\n");
 }
 
-static void generate_function_header(String name, u64 stack_size, String* assembly)
+static void generate_function_header(String name, i64 stack_size, String* assembly)
 {
 	string_push(assembly,
 		"%.*s:\n"
@@ -70,7 +70,7 @@ static void generate_expression(Program* program, Expression expression, LocalVa
 {
 	if (expression.type == ExpressionType_Identifier)
 	{
-		LocalVariable* variable = find_local_variable(local_variables, expression.identifier.str);
+		LocalVariable* variable = find_local_variable(local_variables, expression.identifier);
 		assert(variable);
 
 		char from[32];
@@ -78,9 +78,9 @@ static void generate_expression(Program* program, Expression expression, LocalVa
 
 		stack_push(from, assembly);
 	}
-	else if (expression.type == ExpressionType_IntLiteral)
+	else if (expression.type == ExpressionType_NumericLiteral)
 	{
-		string_push(assembly, "    mov rax, %.*s\n", (i32)expression.int_literal.str.len, expression.int_literal.str.str);
+		string_push(assembly, "    mov rax, %s\n", serialize_primitive_data(expression.literal));
 		stack_push("rax", assembly);
 	}
 	else if (expression_is_binary_operation(expression.type))
@@ -113,7 +113,7 @@ static void generate_expression(Program* program, Expression expression, LocalVa
 			case ExpressionType_Multiplication: string_push(assembly, "    imul rax, rbx\n"); break; // https://www.felixcloutier.com/x86/imul
 			case ExpressionType_Division:		string_push(assembly, "    cqo\n    idiv rbx\n"); break; // https://www.felixcloutier.com/x86/idiv
 			case ExpressionType_Modulo:			string_push(assembly, "    cqo\n    idiv rbx\n    mov rax, rdx\n"); break; // https://www.felixcloutier.com/x86/idiv
-			default:							assert(0);
+			default:							assert(false);
 		}
 
 		stack_push("rax", assembly);
@@ -130,18 +130,18 @@ static void generate_expression(Program* program, Expression expression, LocalVa
 			case ExpressionType_Negate:			string_push(assembly, "    neg rax\n"); break; // https://www.felixcloutier.com/x86/neg
 			case ExpressionType_BitwiseNot:		string_push(assembly, "    not rax\n"); break; // https://www.felixcloutier.com/x86/not
 			case ExpressionType_Not:			string_push(assembly, "    cmp rax, 0\nsete al\nmovzx eax, al\n"); break; // https://www.felixcloutier.com/x86/cmp
-			default:							assert(0);
+			default:							assert(false);
 		}
 
 		stack_push("rax", assembly);
 	}
 }
 
-static void generate_statements(Program* program, u64 first_statement, u64 statement_count, LocalVariableSpan local_variables, String* assembly)
+static void generate_statements(Program* program, i64 first_statement, i64 statement_count, LocalVariableSpan local_variables, String* assembly)
 {
-	for (u64 i = 0; i < statement_count; ++i)
+	for (i64 i = 0; i < statement_count; ++i)
 	{
-		u64 j = i + first_statement;
+		i64 j = i + first_statement;
 
 		Statement statement = program->statements.items[j];
 
@@ -208,7 +208,7 @@ String generate(Program program)
 		"\n"
 	);
 
-	for (u64 i = 0; i < program.functions.count; ++i)
+	for (i64 i = 0; i < program.functions.count; ++i)
 	{
 		Function function = program.functions.items[i];
 		generate_function(&program, function, &assembly);

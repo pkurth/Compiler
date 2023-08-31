@@ -13,7 +13,7 @@ static ExpressionHandle push_expression(Program* stream, Expression expression)
 struct ParseContext
 {
 	TokenStream tokens;
-	u64 current_token;
+	i64 current_token;
 };
 typedef struct ParseContext ParseContext;
 
@@ -119,7 +119,7 @@ static b32 context_expect(ParseContext* context, TokenType expected)
 		{
 			fprintf(stderr, "LINE %d: Expected identifier, got '%.*s'.\n", (i32)unexpected_token.line, (i32)unexpected_token.str.len, unexpected_token.str.str);
 		}
-		else if (expected == TokenType_IntLiteral)
+		else if (expected == TokenType_NumericLiteral)
 		{
 			fprintf(stderr, "LINE %d: Expected literal, got '%.*s'.\n", (i32)unexpected_token.line, (i32)unexpected_token.str.len, unexpected_token.str.str);
 		}
@@ -148,14 +148,14 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 		context_advance(context);
 		return result;
 	}
-	else if (token.type == TokenType_IntLiteral)
+	else if (token.type == TokenType_NumericLiteral)
 	{
-		Expression expression = { .type = ExpressionType_IntLiteral, .int_literal = token };
+		Expression expression = { .type = ExpressionType_NumericLiteral, .literal = token.data };
 		return push_expression(program, expression);
 	}
 	else if (token.type == TokenType_Identifier)
 	{
-		Expression expression = { .type = ExpressionType_Identifier, .identifier = token };
+		Expression expression = { .type = ExpressionType_Identifier, .identifier = token.str };
 		return push_expression(program, expression);
 	}
 	else if (token_is_unary_operator(token.type) && context_expect_not_eof(context))
@@ -260,7 +260,7 @@ static void parse_statement(ParseContext* context, Program* program)
 
 						if (assignment.type != TokenType_Equal)
 						{
-							Expression lhs = { .type = ExpressionType_Identifier, .identifier = identifier };
+							Expression lhs = { .type = ExpressionType_Identifier, .identifier = identifier.str };
 							ExpressionHandle lhs_handle = push_expression(program, lhs);
 
 							Expression operation = { .type = assignment_operator_infos[assignment.type], { .binary = { .lhs = lhs_handle, .rhs = expression } } };
@@ -295,11 +295,11 @@ static void parse_statement(ParseContext* context, Program* program)
 	}
 	else if (token.type == TokenType_OpenBrace)
 	{
-		u64 block_index = program->statements.count;
+		i64 block_index = program->statements.count;
 		statement.type = StatementType_Block;
 		array_push(&program->statements, statement);
 
-		u64 first_statement = program->statements.count;
+		i64 first_statement = program->statements.count;
 
 		while (context_expect_not_eof(context) && context_peek_type(context) != TokenType_CloseBrace)
 		{
@@ -342,7 +342,7 @@ static b32 parse_function_parameters(ParseContext* context, Function* function, 
 
 	if (token.type == TokenType_OpenParenthesis)
 	{
-		u64 first_parameter = program->function_parameters.count;
+		i64 first_parameter = program->function_parameters.count;
 		while (context_peek_type(context) != TokenType_CloseParenthesis && context_peek_type(context) != TokenType_EOF)
 		{
 			if (!context_expect(context, TokenType_I64))
@@ -420,11 +420,11 @@ struct StackInfo
 };
 typedef struct StackInfo StackInfo;
 
-static void collect_local_variables(Program* program, u64 first_statement, u64 statement_count, StackInfo* info)
+static void collect_local_variables(Program* program, i64 first_statement, i64 statement_count, StackInfo* info)
 {
-	for (u64 i = 0; i < statement_count; ++i)
+	for (i64 i = 0; i < statement_count; ++i)
 	{
-		u64 j = i + first_statement;
+		i64 j = i + first_statement;
 
 		Statement statement = program->statements.items[j];
 
@@ -573,13 +573,13 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 
 	*active_mask |= (1 << indent);
 
-	if (expression.type == ExpressionType_IntLiteral)
+	if (expression.type == ExpressionType_NumericLiteral)
 	{
-		printf("%.*s (%d)\n", (i32)expression.int_literal.str.len, expression.int_literal.str.str, (i32)expression_handle);
+		printf("%s (%d)\n", serialize_primitive_data(expression.literal), (i32)expression_handle);
 	}
 	else if (expression.type == ExpressionType_Identifier)
 	{
-		printf("%.*s (%d)\n", (i32)expression.identifier.str.len, expression.identifier.str.str, (i32)expression_handle);
+		printf("%.*s (%d)\n", (i32)expression.identifier.len, expression.identifier.str, (i32)expression_handle);
 	}
 	else if (expression_is_binary_operation(expression.type))
 	{
@@ -602,11 +602,11 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 	*active_mask &= ~(1 << indent);
 }
 
-static void print_statements(Program* program, u64 first_statement, u64 statement_count, i32 indent)
+static void print_statements(Program* program, i64 first_statement, i64 statement_count, i32 indent)
 {
-	for (u64 i = 0; i < statement_count; ++i)
+	for (i64 i = 0; i < statement_count; ++i)
 	{
-		u64 j = i + first_statement;
+		i64 j = i + first_statement;
 
 		Statement statement = program->statements.items[j];
 
@@ -657,7 +657,7 @@ static void print_function(Program* program, Function function)
 
 void print_program(Program* program)
 {
-	for (u64 i = 0; i < program->functions.count; ++i)
+	for (i64 i = 0; i < program->functions.count; ++i)
 	{
 		print_function(program, program->functions.items[i]);
 	}
