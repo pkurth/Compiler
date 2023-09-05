@@ -3,6 +3,19 @@
 #include <assert.h>
 
 
+struct Register
+{
+	const char* reg_64;
+	const char* reg_32;
+	const char* reg_16;
+	const char* reg_low_8;
+	const char* reg_high_8;
+};
+typedef struct Register Register;
+
+static const Register rax = { "rax", "eax", "ax", "ah", "al" };
+
+
 // https://sonictk.github.io/asm_tutorial/#hello,worldrevisted/callingfunctionsinassembly
 
 struct LocalVariableSpan
@@ -66,11 +79,11 @@ static void generate_return(String* assembly)
 	);
 }
 
-static void generate_expression(Program* program, Expression expression, LocalVariableSpan local_variables, String* assembly)
+static void generate_expression(Program* program, Expression* expression, LocalVariableSpan local_variables, String* assembly)
 {
-	if (expression.type == ExpressionType_Identifier)
+	if (expression->type == ExpressionType_Identifier)
 	{
-		LocalVariable* variable = find_local_variable(local_variables, expression.identifier);
+		LocalVariable* variable = find_local_variable(local_variables, expression->identifier);
 		assert(variable);
 
 		char from[32];
@@ -78,22 +91,22 @@ static void generate_expression(Program* program, Expression expression, LocalVa
 
 		stack_push(from, assembly);
 	}
-	else if (expression.type == ExpressionType_NumericLiteral)
+	else if (expression->type == ExpressionType_NumericLiteral)
 	{
-		string_push(assembly, "    mov rax, %s\n", serialize_primitive_data(expression.literal));
+		string_push(assembly, "    mov rax, %s\n", serialize_primitive_data(expression->literal));
 		stack_push("rax", assembly);
 	}
-	else if (expression_is_binary_operation(expression.type))
+	else if (expression_is_binary_operation(expression->type))
 	{
-		Expression a = program_get_expression(program, expression.binary.lhs);
-		Expression b = program_get_expression(program, expression.binary.rhs);
+		Expression* a = program_get_expression(program, expression->binary.lhs);
+		Expression* b = program_get_expression(program, expression->binary.rhs);
 		generate_expression(program, a, local_variables, assembly);
 		generate_expression(program, b, local_variables, assembly);
 
 		stack_pop("rbx", assembly);
 		stack_pop("rax", assembly);
 
-		switch (expression.type)
+		switch (expression->type)
 		{
 			case ExpressionType_LogicalOr:		break;
 			case ExpressionType_LogicalAnd:		break;
@@ -118,14 +131,14 @@ static void generate_expression(Program* program, Expression expression, LocalVa
 
 		stack_push("rax", assembly);
 	}
-	else if (expression_is_unary_operation(expression.type))
+	else if (expression_is_unary_operation(expression->type))
 	{
-		Expression a = program_get_expression(program, expression.unary.expression);
+		Expression* a = program_get_expression(program, expression->unary.expression);
 		generate_expression(program, a, local_variables, assembly);
 
 		stack_pop("rax", assembly);
 
-		switch (expression.type)
+		switch (expression->type)
 		{
 			case ExpressionType_Negate:			string_push(assembly, "    neg rax\n"); break; // https://www.felixcloutier.com/x86/neg
 			case ExpressionType_BitwiseNot:		string_push(assembly, "    not rax\n"); break; // https://www.felixcloutier.com/x86/not
@@ -145,14 +158,14 @@ static void generate_statements(Program* program, i64 first_statement, i64 state
 
 		Statement statement = program->statements.items[j];
 
-		if (statement.type == StatementType_VariableAssignment || statement.type == StatementType_VariableReassignment)
+		if (statement.type == StatementType_Assignment || statement.type == StatementType_Reassignment)
 		{
-			Token identifier = statement.variable_assignment.identifier;
+			String identifier = statement.assignment.identifier;
 
-			Expression expression = program_get_expression(program, statement.variable_assignment.expression);
+			Expression* expression = program_get_expression(program, statement.assignment.expression);
 			generate_expression(program, expression, local_variables, assembly);
 
-			LocalVariable* variable = find_local_variable(local_variables, identifier.str);
+			LocalVariable* variable = find_local_variable(local_variables, identifier);
 			assert(variable);
 
 			stack_pop("rax", assembly);
@@ -160,7 +173,7 @@ static void generate_statements(Program* program, i64 first_statement, i64 state
 		}
 		else if (statement.type == StatementType_Return)
 		{
-			Expression expression = program_get_expression(program, statement.ret.expression);
+			Expression* expression = program_get_expression(program, statement.ret.expression);
 			generate_expression(program, expression, local_variables, assembly);
 
 			stack_pop("rax", assembly);

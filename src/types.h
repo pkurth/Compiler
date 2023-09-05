@@ -133,6 +133,23 @@ enum PrimitiveDatatype
 };
 typedef enum PrimitiveDatatype PrimitiveDatatype;
 
+static b32 data_type_is_signed_integer(PrimitiveDatatype type)
+{
+	return type >= PrimitiveDatatype_I8 && type <= PrimitiveDatatype_I64;
+}
+
+static b32 data_type_is_unsigned_integer(PrimitiveDatatype type)
+{
+	return type >= PrimitiveDatatype_U8 && type <= PrimitiveDatatype_U64;
+}
+
+static b32 data_type_is_floating_point(PrimitiveDatatype type)
+{
+	return type == PrimitiveDatatype_F32 || type == PrimitiveDatatype_F64;
+}
+
+const char* data_type_to_string(PrimitiveDatatype type);
+
 struct PrimitiveData
 {
 	PrimitiveDatatype type;
@@ -256,6 +273,9 @@ enum TokenType
 	TokenType_FirstKeyword = TokenType_If,
 	TokenType_LastKeyword = TokenType_F64,
 
+	TokenType_FirstDatatype = TokenType_I8,
+	TokenType_LastDatatype = TokenType_F64,
+
 	TokenType_FirstAssignmentOperator = TokenType_Equal,
 	TokenType_LastAssignmentOperator = TokenType_HatEqual,
 
@@ -267,6 +287,11 @@ typedef enum TokenType TokenType;
 static b32 token_is_keyword(TokenType type)
 {
 	return (type >= TokenType_FirstKeyword) && (type <= TokenType_LastKeyword);
+}
+
+static b32 token_is_datatype(TokenType type)
+{
+	return (type >= TokenType_FirstDatatype) && (type <= TokenType_LastDatatype);
 }
 
 static b32 token_is_assignment_operator(TokenType type)
@@ -285,12 +310,12 @@ static b32 token_is_unary_operator(TokenType type)
 }
 
 const char* token_type_to_string(TokenType type);
-
+PrimitiveDatatype token_to_datatype(TokenType type);
 
 struct Token
 {
 	TokenType type;
-	u32 line;
+	i32 line;
 
 	String str;
 	PrimitiveData data;
@@ -356,6 +381,11 @@ static b32 expression_is_unary_operation(ExpressionType type)
 	return (type == ExpressionType_Negate) || (type == ExpressionType_BitwiseNot) || (type == ExpressionType_Not);
 }
 
+static b32 expression_is_comparison_operation(ExpressionType type)
+{
+	return (type >= ExpressionType_Equal) && (type <= ExpressionType_GreaterEqual);
+}
+
 struct BinaryExpression
 {
 	ExpressionHandle lhs;
@@ -372,6 +402,7 @@ typedef struct UnaryExpression UnaryExpression;
 struct Expression
 {
 	ExpressionType type;
+	PrimitiveDatatype result_data_type;
 
 	union
 	{
@@ -387,19 +418,19 @@ typedef struct Expression Expression;
 enum StatementType
 {
 	StatementType_Error,
-	StatementType_VariableAssignment,
-	StatementType_VariableReassignment,
+	StatementType_Assignment,
+	StatementType_Reassignment,
 	StatementType_Return,
 	StatementType_Block,
 };
 typedef enum StatementType StatementType;
 
-struct VariableAssignmentStatement
+struct AssignmentStatement
 {
-	Token identifier;
+	String identifier; // TODO: At some point, this will become an expression too (e.g. array indexing).
 	ExpressionHandle expression;
 };
-typedef struct VariableAssignmentStatement VariableAssignmentStatement;
+typedef struct AssignmentStatement AssignmentStatement;
 
 struct ReturnStatement
 {
@@ -419,7 +450,7 @@ struct Statement
 
 	union
 	{
-		VariableAssignmentStatement variable_assignment;
+		AssignmentStatement assignment;
 		ReturnStatement ret;
 		BlockStatement block;
 	};
@@ -437,6 +468,7 @@ struct LocalVariable
 {
 	String name;
 	i32 offset_from_frame_pointer;
+	PrimitiveDatatype data_type;
 };
 typedef struct LocalVariable LocalVariable;
 
@@ -446,6 +478,9 @@ struct Function
 
 	i64 first_statement;
 	i64 statement_count;
+
+	i64 first_expression;
+	i64 expression_count;
 
 	i64 first_parameter;
 	i64 parameter_count;
@@ -469,8 +504,8 @@ struct Program
 };
 typedef struct Program Program;
 
-static Expression program_get_expression(Program* program, ExpressionHandle expression_handle)
+static Expression* program_get_expression(Program* program, ExpressionHandle expression_handle)
 {
-	return program->expressions.items[expression_handle];
+	return &program->expressions.items[expression_handle];
 }
 
