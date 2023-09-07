@@ -113,39 +113,25 @@ static void string_push(String* string, const char* format, ...)
 
 enum PrimitiveDatatype
 {
-	PrimitiveDatatype_I8,
-	PrimitiveDatatype_I16,
-	PrimitiveDatatype_I32,
-	PrimitiveDatatype_I64,
-
-	PrimitiveDatatype_U8,
-	PrimitiveDatatype_U16,
-	PrimitiveDatatype_U32,
-	PrimitiveDatatype_U64,
+	PrimitiveDatatype_Unknown,
 
 	PrimitiveDatatype_B32,
-
+	PrimitiveDatatype_U32,
+	PrimitiveDatatype_I32,
 	PrimitiveDatatype_F32,
-	PrimitiveDatatype_F64,
-
 
 	PrimitiveDatatype_Count,
 };
 typedef enum PrimitiveDatatype PrimitiveDatatype;
 
-static b32 data_type_is_signed_integer(PrimitiveDatatype type)
+static b32 data_type_is_integral(PrimitiveDatatype type)
 {
-	return type >= PrimitiveDatatype_I8 && type <= PrimitiveDatatype_I64;
+	return type == PrimitiveDatatype_I32 || type == PrimitiveDatatype_U32;
 }
 
-static b32 data_type_is_unsigned_integer(PrimitiveDatatype type)
+static b32 data_type_converts_to_b32(PrimitiveDatatype type)
 {
-	return type >= PrimitiveDatatype_U8 && type <= PrimitiveDatatype_U64;
-}
-
-static b32 data_type_is_floating_point(PrimitiveDatatype type)
-{
-	return type == PrimitiveDatatype_F32 || type == PrimitiveDatatype_F64;
+	return type == PrimitiveDatatype_B32 || data_type_is_integral(type);
 }
 
 const char* data_type_to_string(PrimitiveDatatype type);
@@ -156,20 +142,10 @@ struct PrimitiveData
 
 	union
 	{
-		i8 data_i8;
-		i16 data_i16;
-		i32 data_i32;
-		i64 data_i64;
-
-		u8 data_u8;
-		u16 data_u16;
-		u32 data_u32;
-		u64 data_u64;
-
 		b32 data_b32;
-
+		u32 data_u32;
+		i32 data_i32;
 		f32 data_f32;
-		f64 data_f64;
 	};
 };
 typedef struct PrimitiveData PrimitiveData;
@@ -191,17 +167,10 @@ enum TokenType
 	TokenType_While,
 	TokenType_For,
 	TokenType_Return,
-	TokenType_I8,
-	TokenType_I16,
-	TokenType_I32,
-	TokenType_I64,
-	TokenType_U8,
-	TokenType_U16,
-	TokenType_U32,
-	TokenType_U64,
 	TokenType_B32,
+	TokenType_U32,
+	TokenType_I32,
 	TokenType_F32,
-	TokenType_F64,
 
 
 	// Parentheses, brackets, braces.
@@ -271,10 +240,10 @@ enum TokenType
 
 
 	TokenType_FirstKeyword = TokenType_If,
-	TokenType_LastKeyword = TokenType_F64,
+	TokenType_LastKeyword = TokenType_F32,
 
-	TokenType_FirstDatatype = TokenType_I8,
-	TokenType_LastDatatype = TokenType_F64,
+	TokenType_FirstDatatype = TokenType_B32,
+	TokenType_LastDatatype = TokenType_F32,
 
 	TokenType_FirstAssignmentOperator = TokenType_Equal,
 	TokenType_LastAssignmentOperator = TokenType_HatEqual,
@@ -429,6 +398,7 @@ struct AssignmentStatement
 {
 	String identifier; // TODO: At some point, this will become an expression too (e.g. array indexing).
 	ExpressionHandle expression;
+	PrimitiveDatatype data_type; // Only set for assignment, not reassignment.
 };
 typedef struct AssignmentStatement AssignmentStatement;
 

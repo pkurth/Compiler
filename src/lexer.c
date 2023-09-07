@@ -83,17 +83,10 @@ static const TokenKeywordMapping token_keyword_map[] =
 	{ .str = string("while"),	.type = TokenType_While },
 	{ .str = string("for"),		.type = TokenType_For },
 	{ .str = string("return"),	.type = TokenType_Return },
-	{ .str = string("i8"),		.type = TokenType_I8 },
-	{ .str = string("i16"),		.type = TokenType_I16 },
+	{.str = string("b32"),		.type = TokenType_B32 },
 	{ .str = string("i32"),		.type = TokenType_I32 },
-	{ .str = string("i64"),		.type = TokenType_I64 },
-	{ .str = string("u8"),		.type = TokenType_U8 },
-	{ .str = string("u16"),		.type = TokenType_U16 },
 	{ .str = string("u32"),		.type = TokenType_U32 },
-	{ .str = string("u64"),		.type = TokenType_U64 },
-	{ .str = string("b32"),		.type = TokenType_B32 },
 	{ .str = string("f32"),		.type = TokenType_F32 },
-	{ .str = string("f64"),		.type = TokenType_F64 },
 };
 #undef string
 

@@ -1,5 +1,6 @@
 #include "lexer.h"
 #include "parser.h"
+#include "analyzer.h"
 #include "generator.h"
 
 static String read_file(const char* filename)
@@ -115,23 +116,27 @@ i32 main(i32 argc, char** argv)
 		Program program = parse(tokens);
 		if (!program.has_errors)
 		{
-			print_program(&program);
+			analyze(&program);
+			if (!program.has_errors)
+			{
+				print_program(&program);
 
-			String result = generate(program);
-			write_file(asm_path, result);
+				String result = generate(program);
+				write_file(asm_path, result);
 
-			free_string(&result);
+				free_string(&result);
 
 
-			char nasm_command[128] = "";
+				char nasm_command[128] = "";
 
 #if defined(_WIN32)
-			snprintf(nasm_command, sizeof(nasm_command), ".\\nasm\\nasm.exe -f win64 -o %.*s %s", (i32)obj_path.len, obj_path.str, asm_path);
+				snprintf(nasm_command, sizeof(nasm_command), ".\\nasm\\nasm.exe -f win64 -o %.*s %s", (i32)obj_path.len, obj_path.str, asm_path);
 #elif defined(__linux__)
 
 #endif
 
-			system(nasm_command);
+				system(nasm_command);
+			}
 		}
 
 		free_program(&program);

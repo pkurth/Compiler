@@ -98,14 +98,6 @@ static ExpressionType assignment_operator_infos[TokenType_Count] =
 	[TokenType_PercentEqual]		= ExpressionType_Modulo,
 };
 
-struct StackInfo
-{
-	i32 stack_size;
-	i32 current_offset_from_frame_pointer;
-};
-typedef struct StackInfo StackInfo;
-
-
 static b32 context_expect_not_eof(ParseContext* context)
 {
 	b32 result = context_peek_type(context) != TokenType_EOF;
@@ -162,7 +154,7 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 	}
 	else if (token.type == TokenType_Identifier)
 	{
-		Expression expression = { .type = ExpressionType_Identifier, .identifier = token.str, .result_data_type = PrimitiveDatatype_I64 }; // TODO: result_data_type.
+		Expression expression = { .type = ExpressionType_Identifier, .identifier = token.str, .result_data_type = PrimitiveDatatype_I32 }; // TODO: result_data_type.
 		return push_expression(program, expression);
 	}
 	else if (token_is_unary_operator(token.type) && context_expect_not_eof(context))
@@ -213,7 +205,7 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 	return lhs;
 }
 
-static void parse_statement(ParseContext* context, Program* program, StackInfo* stack_info)
+static void parse_statement(ParseContext* context, Program* program)
 {
 	Statement statement = { .type = StatementType_Error };
 
@@ -240,19 +232,7 @@ static void parse_statement(ParseContext* context, Program* program, StackInfo* 
 							statement.type = StatementType_Assignment;
 							statement.assignment.identifier = identifier.str;
 							statement.assignment.expression = expression;
-
-
-							// Add to local variables.
-							stack_info->current_offset_from_frame_pointer += 8; // Increment first!
-							stack_info->stack_size = max(stack_info->stack_size, stack_info->current_offset_from_frame_pointer);
-
-							LocalVariable variable =
-							{
-								.name = identifier.str,
-								.offset_from_frame_pointer = stack_info->current_offset_from_frame_pointer,
-								.data_type = token_to_datatype(token.type),
-							};
-							array_push(&program->local_variables, variable);
+							statement.assignment.data_type = token_to_datatype(token.type);
 						}
 					}
 				}
@@ -322,11 +302,10 @@ static void parse_statement(ParseContext* context, Program* program, StackInfo* 
 		array_push(&program->statements, statement);
 
 		i64 first_statement = program->statements.count;
-		i32 current_offset = stack_info->current_offset_from_frame_pointer;
 
 		while (context_expect_not_eof(context) && context_peek_type(context) != TokenType_CloseBrace)
 		{
-			parse_statement(context, program, stack_info);
+			parse_statement(context, program);
 		}
 
 		program->statements.items[block_index].block.statement_count = program->statements.count - first_statement;
@@ -335,7 +314,6 @@ static void parse_statement(ParseContext* context, Program* program, StackInfo* 
 		{
 			context_advance(context);
 		}
-		stack_info->current_offset_from_frame_pointer = current_offset;
 
 		return;
 	}
@@ -369,7 +347,7 @@ static b32 parse_function_parameters(ParseContext* context, Function* function, 
 		i64 first_parameter = program->function_parameters.count;
 		while (context_peek_type(context) != TokenType_CloseParenthesis && context_peek_type(context) != TokenType_EOF)
 		{
-			if (!context_expect(context, TokenType_I64))
+			if (!context_expect(context, TokenType_I32))
 			{
 				return false;
 			}
@@ -413,7 +391,7 @@ static b32 parse_function_return_types(ParseContext* context, Function* function
 	{
 		while (context_peek_type(context) != TokenType_CloseParenthesis && context_peek_type(context) != TokenType_EOF)
 		{
-			if (!context_expect(context, TokenType_I64))
+			if (!context_expect(context, TokenType_I32))
 			{
 				return false;
 			}
@@ -434,65 +412,6 @@ static b32 parse_function_return_types(ParseContext* context, Function* function
 	}
 
 	return false;
-}
-
-static PrimitiveDatatype unary_operation_result_datatype(PrimitiveDatatype rhs, ExpressionType expression_type)
-{
-	return rhs;
-}
-
-static PrimitiveDatatype binary_operation_result_datatype(PrimitiveDatatype lhs, PrimitiveDatatype rhs, ExpressionType expression_type)
-{
-	if (expression_is_comparison_operation(expression_type))
-	{
-		return PrimitiveDatatype_B32;
-	}
-
-	return max(lhs, rhs);
-}
-
-static b32 deduce_expression_types(Program* program, Function* function)
-{
-	for (i64 i = 0; i < function->expression_count; ++i)
-	{
-		i64 expression_index = i + function->first_expression;
-		Expression* expression = &program->expressions.items[expression_index];
-
-		if (expression_is_binary_operation(expression->type))
-		{
-			assert(expression->binary.lhs < expression_index);
-			assert(expression->binary.rhs < expression_index);
-
-			Expression* lhs = program_get_expression(program, expression->binary.lhs);
-			Expression* rhs = program_get_expression(program, expression->binary.rhs);
-			expression->result_data_type = binary_operation_result_datatype(lhs->result_data_type, rhs->result_data_type, expression->type);
-		}
-		else if (expression_is_unary_operation(expression->type))
-		{
-			assert(expression->unary.expression < expression_index);
-
-			Expression* rhs = program_get_expression(program, expression->unary.expression);
-			expression->result_data_type = unary_operation_result_datatype(rhs->result_data_type, expression->type);
-		}
-		else if (expression->type == ExpressionType_NumericLiteral)
-		{
-			expression->result_data_type = expression->literal.type;
-		}
-		else if (expression->type == ExpressionType_Identifier)
-		{
-			for (i64 j = 0; j < function->local_variable_count; ++j)
-			{
-				LocalVariable* var = &program->local_variables.items[j + function->first_local_variable];
-				if (string_equal(var->name, expression->identifier))
-				{
-					expression->result_data_type = var->data_type;
-					break;
-				}
-			}
-		}
-	}
-
-	return true;
 }
 
 static b32 parse_function(ParseContext* context, Program* program)
@@ -526,20 +445,15 @@ static b32 parse_function(ParseContext* context, Program* program)
 
 	function.first_statement = program->statements.count;
 	function.first_expression = program->expressions.count;
-	function.first_local_variable = program->local_variables.count;
 
-	StackInfo stack_info = { 0 };
-	parse_statement(context, program, &stack_info);
+	parse_statement(context, program);
 
 	function.statement_count = program->statements.count - function.first_statement;
 	function.expression_count = program->expressions.count - function.first_expression;
-	function.local_variable_count = program->local_variables.count - function.first_local_variable;
-
-	function.stack_size = stack_info.stack_size;
 
 	array_push(&program->functions, function);
 
-	return deduce_expression_types(program, &function);
+	return true;
 }
 
 Program parse(TokenStream stream)
@@ -549,15 +463,11 @@ Program parse(TokenStream stream)
 
 	push_expression(&program, (Expression) { .type = ExpressionType_Error }); // Dummy.
 
-	b32 has_errors = 0;
-
 	while (context_peek_type(&context) != TokenType_EOF)
 	{
 		b32 success = parse_function(&context, &program);
-		has_errors |= !success;
+		program.has_errors |= !success;
 	}
-
-	program.has_errors = has_errors;
 
 	return program;
 }

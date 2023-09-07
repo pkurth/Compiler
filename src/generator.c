@@ -3,19 +3,6 @@
 #include <assert.h>
 
 
-struct Register
-{
-	const char* reg_64;
-	const char* reg_32;
-	const char* reg_16;
-	const char* reg_low_8;
-	const char* reg_high_8;
-};
-typedef struct Register Register;
-
-static const Register rax = { "rax", "eax", "ax", "ah", "al" };
-
-
 // https://sonictk.github.io/asm_tutorial/#hello,worldrevisted/callingfunctionsinassembly
 
 struct LocalVariableSpan
