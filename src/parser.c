@@ -493,7 +493,6 @@ void free_program(Program* program)
 {
 	array_free(&program->functions);
 	array_free(&program->function_parameters);
-	array_free(&program->local_variables);
 	array_free(&program->expressions);
 }
 
@@ -551,34 +550,44 @@ static void print_expressions(Program* program, ExpressionHandle expression_hand
 		}
 		else if (expression->type == ExpressionType_Identifier)
 		{
-			printf("%.*s (%s, %d)\n", (i32)expression->identifier.name.len, expression->identifier.name.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
+			IdentifierExpression e = expression->identifier;
+
+			printf("%.*s (%s, %d)\n", (i32)e.name.len, e.name.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
 		}
 		else if (expression_is_binary_operation(expression->type))
 		{
+			BinaryExpression e = expression->binary;
+
 			printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
 
-			print_expressions(program, expression->binary.lhs, indent + 1, active_mask);
+			print_expressions(program, e.lhs, indent + 1, active_mask);
 			*active_mask &= ~(1 << indent);
-			print_expressions(program, expression->binary.rhs, indent + 1, active_mask);
+			print_expressions(program, e.rhs, indent + 1, active_mask);
 		}
 		else if (expression_is_unary_operation(expression->type))
 		{
+			UnaryExpression e = expression->unary;
+
 			printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
-			print_expressions(program, expression->unary.rhs, indent + 1, active_mask);
+			print_expressions(program, e.rhs, indent + 1, active_mask);
 		}
 		else if (expression->type == ExpressionType_Assignment)
 		{
-			Expression* lhs = program_get_expression(program, expression->assignment.lhs);
+			AssignmentExpression e = expression->assignment;
+
+			Expression* lhs = program_get_expression(program, e.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
 			String identifier = lhs->identifier.name;
 
 			printf("* Variable assignment %.*s\n", (i32)identifier.len, identifier.str);
-			print_expressions(program, expression->assignment.rhs, indent + 1, active_mask);
+			print_expressions(program, e.rhs, indent + 1, active_mask);
 		}
 		else if (expression->type == ExpressionType_Declaration)
 		{
-			Expression* lhs = program_get_expression(program, expression->declaration.lhs);
+			DeclarationExpression e = expression->declaration;
+
+			Expression* lhs = program_get_expression(program, e.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
 			String identifier = lhs->identifier.name;
@@ -587,13 +596,15 @@ static void print_expressions(Program* program, ExpressionHandle expression_hand
 		}
 		else if (expression->type == ExpressionType_DeclarationAssignment)
 		{
-			Expression* lhs = program_get_expression(program, expression->declaration_assignment.lhs);
+			DeclarationAssignmentExpression e = expression->declaration_assignment;
+
+			Expression* lhs = program_get_expression(program, e.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
 			String identifier = lhs->identifier.name;
 
 			printf("* Variable declaration & assignment %.*s\n", (i32)identifier.len, identifier.str);
-			print_expressions(program, expression->declaration_assignment.rhs, indent + 1, active_mask);
+			print_expressions(program, e.rhs, indent + 1, active_mask);
 		}
 		else if (expression->type == ExpressionType_Return)
 		{

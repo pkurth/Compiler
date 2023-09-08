@@ -5,13 +5,6 @@
 
 // https://sonictk.github.io/asm_tutorial/#hello,worldrevisted/callingfunctionsinassembly
 
-struct LocalVariableSpan
-{
-	LocalVariable* variables;
-	i64 variable_count;
-};
-typedef struct LocalVariableSpan LocalVariableSpan;
-
 static void stack_push(const char* from, String* assembly)
 {
 	string_push(assembly, "    push %s\n", from);
@@ -46,7 +39,7 @@ static void generate_return(String* assembly)
 	);
 }
 
-static void generate_expression(Program* program, Expression* expression, LocalVariableSpan local_variables, String* assembly)
+static void generate_expression(Program* program, Expression* expression, String* assembly)
 {
 	if (expression->type == ExpressionType_Identifier)
 	{
@@ -62,10 +55,12 @@ static void generate_expression(Program* program, Expression* expression, LocalV
 	}
 	else if (expression_is_binary_operation(expression->type))
 	{
-		Expression* lhs = program_get_expression(program, expression->binary.lhs);
-		Expression* rhs = program_get_expression(program, expression->binary.rhs);
-		generate_expression(program, lhs, local_variables, assembly);
-		generate_expression(program, rhs, local_variables, assembly);
+		BinaryExpression e = expression->binary;
+
+		Expression* lhs = program_get_expression(program, e.lhs);
+		Expression* rhs = program_get_expression(program, e.rhs);
+		generate_expression(program, lhs, assembly);
+		generate_expression(program, rhs, assembly);
 
 		stack_pop("rbx", assembly);
 		stack_pop("rax", assembly);
@@ -97,8 +92,10 @@ static void generate_expression(Program* program, Expression* expression, LocalV
 	}
 	else if (expression_is_unary_operation(expression->type))
 	{
-		Expression* rhs = program_get_expression(program, expression->unary.rhs);
-		generate_expression(program, rhs, local_variables, assembly);
+		UnaryExpression e = expression->unary;
+
+		Expression* rhs = program_get_expression(program, e.rhs);
+		generate_expression(program, rhs, assembly);
 
 		stack_pop("rax", assembly);
 
@@ -114,11 +111,13 @@ static void generate_expression(Program* program, Expression* expression, LocalV
 	}
 	else if (expression->type == ExpressionType_Assignment)
 	{
-		Expression* lhs = program_get_expression(program, expression->assignment.lhs);
+		AssignmentExpression e = expression->assignment;
+
+		Expression* lhs = program_get_expression(program, e.lhs);
 		assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
-		Expression* rhs = program_get_expression(program, expression->assignment.rhs);
-		generate_expression(program, rhs, local_variables, assembly);
+		Expression* rhs = program_get_expression(program, e.rhs);
+		generate_expression(program, rhs, assembly);
 
 		stack_pop("rax", assembly);
 		string_push(assembly, "    mov [rbp-%d], rax\n", lhs->identifier.offset_from_frame_pointer);
@@ -126,7 +125,7 @@ static void generate_expression(Program* program, Expression* expression, LocalV
 	}
 }
 
-static void generate_top_level_expression(Program* program, ExpressionHandle expression_handle, LocalVariableSpan local_variables, String* assembly)
+static void generate_top_level_expression(Program* program, ExpressionHandle expression_handle, String* assembly)
 {
 	while (expression_handle)
 	{
@@ -138,11 +137,13 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 		}
 		else if (expression->type == ExpressionType_DeclarationAssignment)
 		{
-			Expression* lhs = program_get_expression(program, expression->declaration_assignment.lhs);
+			DeclarationAssignmentExpression e = expression->declaration_assignment;
+
+			Expression* lhs = program_get_expression(program, e.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
-			Expression* rhs = program_get_expression(program, expression->declaration_assignment.rhs);
-			generate_expression(program, rhs, local_variables, assembly);
+			Expression* rhs = program_get_expression(program, e.rhs);
+			generate_expression(program, rhs, assembly);
 
 			stack_pop("rax", assembly);
 			string_push(assembly, "    mov [rbp-%d], rax\n", lhs->identifier.offset_from_frame_pointer);
@@ -150,18 +151,18 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 		else if (expression->type == ExpressionType_Return)
 		{
 			Expression* rhs = program_get_expression(program, expression->ret.rhs);
-			generate_expression(program, rhs, local_variables, assembly);
+			generate_expression(program, rhs, assembly);
 
 			stack_pop("rax", assembly);
 			generate_return(assembly);
 		}
 		else if (expression->type == ExpressionType_Block)
 		{
-			generate_top_level_expression(program, expression->block.first_expression, local_variables, assembly);
+			generate_top_level_expression(program, expression->block.first_expression, assembly);
 		}
 		else
 		{
-			generate_expression(program, expression, local_variables, assembly);
+			generate_expression(program, expression, assembly);
 		}
 
 		expression_handle = expression->next;
@@ -171,11 +172,7 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 static void generate_function(Program* program, Function function, String* assembly)
 {
 	generate_function_header(function.name, function.stack_size, assembly);
-
-	LocalVariableSpan local_variables = { .variables = program->local_variables.items + function.first_local_variable, .variable_count = function.local_variable_count };
-
-	generate_top_level_expression(program, function.first_expression, local_variables, assembly);
-
+	generate_top_level_expression(program, function.first_expression, assembly);
 	string_push(assembly, "\n");
 }
 

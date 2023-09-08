@@ -460,8 +460,6 @@ struct Function
 	i64 first_parameter;
 	i64 parameter_count;
 
-	i64 first_local_variable;
-	i64 local_variable_count;
 	i64 stack_size;
 };
 typedef struct Function Function;
@@ -471,7 +469,7 @@ struct Program
 {
 	DynamicArray(Function) functions;
 	DynamicArray(FunctionParameter) function_parameters;
-	DynamicArray(LocalVariable) local_variables;
+	//DynamicArray(LocalVariable) local_variables;
 	DynamicArray(Expression) expressions;
 
 	b32 has_errors;
