@@ -302,7 +302,7 @@ typedef DynamicArray(Token) TokenStream;
 
 
 
-typedef i64 ExpressionHandle;
+typedef i32 ExpressionHandle;
 
 enum ExpressionType
 {
@@ -335,6 +335,12 @@ enum ExpressionType
 
 	ExpressionType_NumericLiteral,
 	ExpressionType_Identifier,
+
+	ExpressionType_Assignment,
+	ExpressionType_Declaration,
+	ExpressionType_DeclarationAssignment,
+	ExpressionType_Return,
+	ExpressionType_Block,
 
 	ExpressionType_Count,
 };
@@ -371,14 +377,50 @@ typedef struct BinaryExpression BinaryExpression;
 
 struct UnaryExpression
 {
-	ExpressionHandle expression;
+	ExpressionHandle rhs;
 };
 typedef struct UnaryExpression UnaryExpression;
+
+struct AssignmentExpression
+{
+	ExpressionHandle lhs;
+	ExpressionHandle rhs;
+};
+typedef struct AssignmentExpression AssignmentExpression;
+
+struct DeclarationExpression
+{
+	ExpressionHandle lhs;
+	PrimitiveDatatype data_type;
+};
+typedef struct DeclarationExpression DeclarationExpression;
+
+struct DeclarationAssignmentExpression
+{
+	ExpressionHandle lhs;
+	PrimitiveDatatype data_type;
+	ExpressionHandle rhs;
+};
+typedef struct DeclarationAssignmentExpression DeclarationAssignmentExpression;
+
+struct ReturnExpression
+{
+	ExpressionHandle rhs;
+};
+typedef struct ReturnExpression ReturnExpression;
+
+struct BlockExpression
+{
+	ExpressionHandle first_expression;
+};
+typedef struct BlockExpression BlockExpression;
 
 struct Expression
 {
 	ExpressionType type;
 	PrimitiveDatatype result_data_type;
+
+	ExpressionHandle next;
 
 	union
 	{
@@ -386,54 +428,14 @@ struct Expression
 		IdentifierExpression identifier;
 		BinaryExpression binary;
 		UnaryExpression unary;
+		AssignmentExpression assignment;
+		DeclarationExpression declaration;
+		DeclarationAssignmentExpression declaration_assignment;
+		ReturnExpression ret;
+		BlockExpression block;
 	};
 };
 typedef struct Expression Expression;
-
-
-enum StatementType
-{
-	StatementType_Error,
-	StatementType_Assignment,
-	StatementType_Reassignment,
-	StatementType_Return,
-	StatementType_Block,
-};
-typedef enum StatementType StatementType;
-
-struct AssignmentStatement
-{
-	ExpressionHandle lhs;
-	ExpressionHandle rhs;
-	PrimitiveDatatype data_type; // Only set for assignment, not reassignment.
-};
-typedef struct AssignmentStatement AssignmentStatement;
-
-struct ReturnStatement
-{
-	ExpressionHandle expression;
-};
-typedef struct ReturnStatement ReturnStatement;
-
-struct BlockStatement
-{
-	i64 statement_count;
-};
-typedef struct BlockStatement BlockStatement;
-
-struct Statement
-{
-	StatementType type;
-
-	union
-	{
-		AssignmentStatement assignment;
-		ReturnStatement ret;
-		BlockStatement block;
-	};
-};
-typedef struct Statement Statement;
-
 
 struct FunctionParameter
 {
@@ -453,11 +455,7 @@ struct Function
 {
 	String name;
 
-	i64 first_statement;
-	i64 statement_count;
-
-	i64 first_expression;
-	i64 expression_count;
+	ExpressionHandle first_expression;
 
 	i64 first_parameter;
 	i64 parameter_count;
@@ -474,7 +472,6 @@ struct Program
 	DynamicArray(Function) functions;
 	DynamicArray(FunctionParameter) function_parameters;
 	DynamicArray(LocalVariable) local_variables;
-	DynamicArray(Statement) statements;
 	DynamicArray(Expression) expressions;
 
 	b32 has_errors;

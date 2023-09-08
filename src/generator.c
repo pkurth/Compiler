@@ -62,10 +62,10 @@ static void generate_expression(Program* program, Expression* expression, LocalV
 	}
 	else if (expression_is_binary_operation(expression->type))
 	{
-		Expression* a = program_get_expression(program, expression->binary.lhs);
-		Expression* b = program_get_expression(program, expression->binary.rhs);
-		generate_expression(program, a, local_variables, assembly);
-		generate_expression(program, b, local_variables, assembly);
+		Expression* lhs = program_get_expression(program, expression->binary.lhs);
+		Expression* rhs = program_get_expression(program, expression->binary.rhs);
+		generate_expression(program, lhs, local_variables, assembly);
+		generate_expression(program, rhs, local_variables, assembly);
 
 		stack_pop("rbx", assembly);
 		stack_pop("rax", assembly);
@@ -97,8 +97,8 @@ static void generate_expression(Program* program, Expression* expression, LocalV
 	}
 	else if (expression_is_unary_operation(expression->type))
 	{
-		Expression* a = program_get_expression(program, expression->unary.expression);
-		generate_expression(program, a, local_variables, assembly);
+		Expression* rhs = program_get_expression(program, expression->unary.rhs);
+		generate_expression(program, rhs, local_variables, assembly);
 
 		stack_pop("rax", assembly);
 
@@ -112,40 +112,59 @@ static void generate_expression(Program* program, Expression* expression, LocalV
 
 		stack_push("rax", assembly);
 	}
+	else if (expression->type == ExpressionType_Assignment)
+	{
+		Expression* lhs = program_get_expression(program, expression->assignment.lhs);
+		assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+		Expression* rhs = program_get_expression(program, expression->assignment.rhs);
+		generate_expression(program, rhs, local_variables, assembly);
+
+		stack_pop("rax", assembly);
+		string_push(assembly, "    mov [rbp-%d], rax\n", lhs->identifier.offset_from_frame_pointer);
+		stack_push("rax", assembly);
+	}
 }
 
-static void generate_statements(Program* program, i64 first_statement, i64 statement_count, LocalVariableSpan local_variables, String* assembly)
+static void generate_top_level_expression(Program* program, ExpressionHandle expression_handle, LocalVariableSpan local_variables, String* assembly)
 {
-	for (i64 i = 0; i < statement_count; ++i)
+	while (expression_handle)
 	{
-		i64 j = i + first_statement;
+		Expression* expression = program_get_expression(program, expression_handle);
 
-		Statement statement = program->statements.items[j];
-
-		if (statement.type == StatementType_Assignment || statement.type == StatementType_Reassignment)
+		if (expression->type == ExpressionType_Declaration)
 		{
-			Expression* lhs = program_get_expression(program, statement.assignment.lhs);
+
+		}
+		else if (expression->type == ExpressionType_DeclarationAssignment)
+		{
+			Expression* lhs = program_get_expression(program, expression->declaration_assignment.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
-			Expression* rhs = program_get_expression(program, statement.assignment.rhs);
+			Expression* rhs = program_get_expression(program, expression->declaration_assignment.rhs);
 			generate_expression(program, rhs, local_variables, assembly);
 
 			stack_pop("rax", assembly);
 			string_push(assembly, "    mov [rbp-%d], rax\n", lhs->identifier.offset_from_frame_pointer);
 		}
-		else if (statement.type == StatementType_Return)
+		else if (expression->type == ExpressionType_Return)
 		{
-			Expression* expression = program_get_expression(program, statement.ret.expression);
-			generate_expression(program, expression, local_variables, assembly);
+			Expression* rhs = program_get_expression(program, expression->ret.rhs);
+			generate_expression(program, rhs, local_variables, assembly);
 
 			stack_pop("rax", assembly);
 			generate_return(assembly);
 		}
-		else if (statement.type == StatementType_Block)
+		else if (expression->type == ExpressionType_Block)
 		{
-			generate_statements(program, j + 1, statement.block.statement_count, local_variables, assembly);
-			i += statement.block.statement_count;
+			generate_top_level_expression(program, expression->block.first_expression, local_variables, assembly);
 		}
+		else
+		{
+			generate_expression(program, expression, local_variables, assembly);
+		}
+
+		expression_handle = expression->next;
 	}
 }
 
@@ -155,7 +174,7 @@ static void generate_function(Program* program, Function function, String* assem
 
 	LocalVariableSpan local_variables = { .variables = program->local_variables.items + function.first_local_variable, .variable_count = function.local_variable_count };
 
-	generate_statements(program, function.first_statement, function.statement_count, local_variables, assembly);
+	generate_top_level_expression(program, function.first_expression, local_variables, assembly);
 
 	string_push(assembly, "\n");
 }

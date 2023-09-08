@@ -3,10 +3,10 @@
 #include <assert.h>
 
 
-static ExpressionHandle push_expression(Program* stream, Expression expression)
+static ExpressionHandle push_expression(Program* program, Expression expression)
 {
-	ExpressionHandle result = stream->expressions.count;
-	array_push(&stream->expressions, expression);
+	ExpressionHandle result = (i32)program->expressions.count;
+	array_push(&program->expressions, expression);
 	return result;
 }
 
@@ -30,6 +30,11 @@ static TokenType context_peek_type(ParseContext* context)
 static void context_advance(ParseContext* context)
 {
 	++context->current_token;
+}
+
+static void context_withdraw(ParseContext* context)
+{
+	--context->current_token;
 }
 
 static Token context_consume(ParseContext* context)
@@ -57,6 +62,7 @@ typedef struct OperatorInfo OperatorInfo;
 
 static OperatorInfo binary_operator_infos[TokenType_Count] =
 {
+	[TokenType_Equal]				= { ExpressionType_Assignment,		Associativity_Right,	0 },
 	[TokenType_PipePipe]			= { ExpressionType_LogicalOr,		Associativity_Left,		1 },
 	[TokenType_AmpersandAmpersand]	= { ExpressionType_LogicalAnd,		Associativity_Left,		2 },
 	[TokenType_Pipe]				= { ExpressionType_BitwiseOr,		Associativity_Left,		3 },
@@ -161,7 +167,7 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 	{
 		ExpressionHandle rhs = parse_atom(context, program);
 
-		Expression expression = { .type = unary_operator_infos[token.type], .unary = { .expression = rhs } };
+		Expression expression = { .type = unary_operator_infos[token.type], .unary = { .rhs = rhs } };
 		return push_expression(program, expression);
 	}
 	else
@@ -181,7 +187,8 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 	for (;;)
 	{
 		TokenType next_token_type = context_peek_type(context);
-		if (!token_is_binary_operator(next_token_type))
+
+		if (!token_is_binary_operator(next_token_type) && !token_is_assignment_operator(next_token_type))
 		{
 			break;
 		}
@@ -198,16 +205,30 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 
 		ExpressionHandle rhs = parse_expression(context, program, next_min_precedence);
 
-		Expression operation = { .type = info.expression_type, .binary = { .lhs = lhs, .rhs = rhs } };
-		lhs = push_expression(program, operation);
+		if (token_is_binary_operator(next_token_type))
+		{
+			Expression operation = { .type = info.expression_type, .binary = {.lhs = lhs, .rhs = rhs } };
+			lhs = push_expression(program, operation);
+		}
+		else if (token_is_assignment_operator(next_token_type))
+		{
+			if (next_token_type != TokenType_Equal)
+			{
+				Expression operation = { .type = assignment_operator_infos[next_token_type], .binary = { .lhs = lhs, .rhs = rhs } };
+				rhs = push_expression(program, operation);
+			}
+
+			Expression assignment = { .type = ExpressionType_Assignment, .assignment = {.lhs = lhs, .rhs = rhs } };
+			lhs = push_expression(program, assignment);
+		}
 	}
 
 	return lhs;
 }
 
-static void parse_statement(ParseContext* context, Program* program)
+static ExpressionHandle parse_top_level_expression(ParseContext* context, Program* program)
 {
-	Statement statement = { .type = StatementType_Error };
+	ExpressionHandle result = ExpressionType_Error;
 
 	Token token = context_consume(context);
 	if (token_is_datatype(token.type))
@@ -216,117 +237,111 @@ static void parse_statement(ParseContext* context, Program* program)
 		{
 			Token identifier = context_consume(context);
 
-			if (context_expect(context, TokenType_Equal))
+			Expression lhs_expression = { .type = ExpressionType_Identifier, .identifier = {.name = identifier.str } };
+			ExpressionHandle lhs = push_expression(program, lhs_expression);
+
+			TokenType next = context_peek_type(context);
+			if (next == TokenType_Semicolon)
 			{
 				context_advance(context);
 
-				if (context_expect_not_eof(context))
+				Expression expression =
 				{
-					ExpressionHandle rhs = parse_expression(context, program, 1);
-					if (rhs)
-					{
-						if (context_expect(context, TokenType_Semicolon))
-						{
-							context_advance(context);
-
-							Expression lhs_expression = { .type = ExpressionType_Identifier, .identifier = {.name = identifier.str } };
-							ExpressionHandle lhs = push_expression(program, lhs_expression);
-
-							statement.type = StatementType_Assignment;
-							statement.assignment.lhs = lhs;
-							statement.assignment.rhs = rhs;
-							statement.assignment.data_type = token_to_datatype(token.type);
-						}
-					}
-				}
+					.type = ExpressionType_Declaration,
+					.declaration = {.data_type = token_to_datatype(token.type), .lhs = lhs }
+				};
+				result = push_expression(program, expression);
 			}
-		}
-	}
-	else if (token.type == TokenType_Identifier)
-	{
-		Token identifier = token;
-
-		if (token_is_assignment_operator(context_peek_type(context)))
-		{
-			Token assignment = context_consume(context);
-
-			if (context_expect_not_eof(context))
+			else if (next == TokenType_Equal)
 			{
-				ExpressionHandle rhs = parse_expression(context, program, 1);
+				context_advance(context);
+
+				ExpressionHandle rhs = parse_expression(context, program, 0);
 				if (rhs)
 				{
-					if (context_expect(context, TokenType_Semicolon))
+					Expression expression =
 					{
-						context_advance(context);
+						.type = ExpressionType_DeclarationAssignment,
+						.declaration_assignment = {.data_type = token_to_datatype(token.type), .lhs = lhs, .rhs = rhs }
+					};
+					result = push_expression(program, expression);
+				}
 
-						Expression lhs_expression = { .type = ExpressionType_Identifier, .identifier = identifier.str };
-						ExpressionHandle lhs = push_expression(program, lhs_expression);
-
-						statement.type = StatementType_Reassignment;
-						statement.assignment.lhs = lhs;
-						statement.assignment.rhs = rhs;
-
-						if (assignment.type != TokenType_Equal)
-						{
-							Expression operation_expression = { .type = assignment_operator_infos[assignment.type], .binary = { .lhs = lhs, .rhs = rhs } };
-							statement.assignment.rhs = push_expression(program, operation_expression);
-						}
-					}
+				if (context_expect(context, TokenType_Semicolon))
+				{
+					context_advance(context);
 				}
 			}
-		}
-		else
-		{
-			Token unexpected_token = context_peek(context);
-			fprintf(stderr, "LINE %d: Expected assignment operator, got '%.*s'.\n", unexpected_token.line, (i32)unexpected_token.str.len, unexpected_token.str.str);
+			else
+			{
+				Token unexpected_token = context_peek(context);
+				fprintf(stderr, "LINE %d: Unexpected token '%.*s'.\n", unexpected_token.line, (i32)unexpected_token.str.len, unexpected_token.str.str);
+			}
 		}
 	}
 	else if (token.type == TokenType_Return)
 	{
 		if (context_expect_not_eof(context))
 		{
-			ExpressionHandle expression = parse_expression(context, program, 1);
-			if (expression)
+			ExpressionHandle rhs = parse_expression(context, program, 0);
+			if (rhs)
 			{
 				if (context_expect(context, TokenType_Semicolon))
 				{
 					context_advance(context);
 
-					statement.type = StatementType_Return;
-					statement.ret.expression = expression;
+					Expression return_expression =
+					{
+						.type = ExpressionType_Return,
+						.ret = { .rhs = rhs }
+					};
+					result = push_expression(program, return_expression);
 				}
 			}
 		}
 	}
 	else if (token.type == TokenType_OpenBrace)
 	{
-		i64 block_index = program->statements.count;
-		statement.type = StatementType_Block;
-		array_push(&program->statements, statement);
+		Expression block_expression =
+		{
+			.type = ExpressionType_Block
+		};
 
-		i64 first_statement = program->statements.count;
-
+		ExpressionHandle last = 0;
 		while (context_expect_not_eof(context) && context_peek_type(context) != TokenType_CloseBrace)
 		{
-			parse_statement(context, program);
+			ExpressionHandle expression = parse_top_level_expression(context, program);
+			if (last)
+			{
+				program_get_expression(program, last)->next = expression;
+			}
+			else
+			{
+				block_expression.block.first_expression = expression;
+			}
+			last = expression;
 		}
-
-		program->statements.items[block_index].block.statement_count = program->statements.count - first_statement;
 
 		if (context_expect(context, TokenType_CloseBrace))
 		{
 			context_advance(context);
 		}
 
-		return;
+		result = push_expression(program, block_expression);
 	}
 	else
 	{
-		fprintf(stderr, "LINE %d: Unexpected token '%.*s'.\n", token.line, (i32)token.str.len, token.str.str);
+		context_withdraw(context);
+		result = parse_expression(context, program, 0);
+		if (context_expect(context, TokenType_Semicolon))
+		{
+			context_advance(context);
+		}
 	}
 
-	if (statement.type == StatementType_Error)
+	if (result == ExpressionType_Error)
 	{
+		// Error -> flush to next semicolon.
 		for (; context_peek_type(context) != TokenType_Semicolon && context_peek_type(context) != TokenType_EOF; context_advance(context))
 		{
 		}
@@ -338,7 +353,7 @@ static void parse_statement(ParseContext* context, Program* program)
 		}
 	}
 
-	array_push(&program->statements, statement);
+	return result;
 }
 
 static b32 parse_function_parameters(ParseContext* context, Function* function, Program* program)
@@ -446,13 +461,12 @@ static b32 parse_function(ParseContext* context, Program* program)
 		context_advance(context);
 	}
 
-	function.first_statement = program->statements.count;
-	function.first_expression = program->expressions.count;
+	if (context_expect(context, TokenType_OpenBrace))
+	{
+		// Don't advance.
+	}
 
-	parse_statement(context, program);
-
-	function.statement_count = program->statements.count - function.first_statement;
-	function.expression_count = program->expressions.count - function.first_expression;
+	function.first_expression = parse_top_level_expression(context, program);
 
 	array_push(&program->functions, function);
 
@@ -480,7 +494,6 @@ void free_program(Program* program)
 	array_free(&program->functions);
 	array_free(&program->function_parameters);
 	array_free(&program->local_variables);
-	array_free(&program->statements);
 	array_free(&program->expressions);
 }
 
@@ -512,98 +525,94 @@ static const char* operator_strings[ExpressionType_Count] =
 	[ExpressionType_Not]			= "!",
 };
 
-static void print_expression(Program* program, ExpressionHandle expression_handle, i32 indent, i32* active_mask)
+static void print_expressions(Program* program, ExpressionHandle expression_handle, i32 indent, i32* active_mask)
 {
-	for (i32 i = 0; i < indent; ++i)
+	while (expression_handle)
 	{
-		i32 last = (i == indent - 1);
-		i32 is_active = ((1 << i) & *active_mask);
-		printf((is_active || last) ? "|" : " ");
-		printf(last ? "-> " : "   ");
-	}
-
-	Expression* expression = program_get_expression(program, expression_handle);
-	if (expression->type == ExpressionType_Error)
-	{
-		return;
-	}
-
-	*active_mask |= (1 << indent);
-
-	if (expression->type == ExpressionType_NumericLiteral)
-	{
-		printf("%s (%s, %d)\n", serialize_primitive_data(expression->literal), data_type_to_string(expression->result_data_type), (i32)expression_handle);
-	}
-	else if (expression->type == ExpressionType_Identifier)
-	{
-		printf("%.*s (%s, %d)\n", (i32)expression->identifier.name.len, expression->identifier.name.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
-	}
-	else if (expression_is_binary_operation(expression->type))
-	{
-		printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
-
-		print_expression(program, expression->binary.lhs, indent + 1, active_mask);
-		*active_mask &= ~(1 << indent);
-		print_expression(program, expression->binary.rhs, indent + 1, active_mask);
-	}
-	else if (expression_is_unary_operation(expression->type))
-	{
-		printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
-		print_expression(program, expression->unary.expression, indent + 1, active_mask);
-	}
-	else
-	{
-		assert(!"Unknown expression type");
-	}
-
-	*active_mask &= ~(1 << indent);
-}
-
-static void print_statements(Program* program, i64 first_statement, i64 statement_count, i32 indent)
-{
-	for (i64 i = 0; i < statement_count; ++i)
-	{
-		i64 j = i + first_statement;
-
-		Statement statement = program->statements.items[j];
-
 		for (i32 i = 0; i < indent; ++i)
 		{
-			printf("   ");
+			i32 last = (i == indent - 1);
+			i32 is_active = ((1 << i) & *active_mask);
+			printf((is_active || last) ? "|" : " ");
+			printf(last ? "-> " : "   ");
 		}
 
-		i32 active_mask = 0;
-
-		if (statement.type == ExpressionType_Error)
+		Expression* expression = program_get_expression(program, expression_handle);
+		if (expression->type == ExpressionType_Error)
 		{
-			continue;
+			return;
 		}
 
-		if (statement.type == StatementType_Assignment || statement.type == StatementType_Reassignment)
+		*active_mask |= (1 << indent);
+
+		if (expression->type == ExpressionType_NumericLiteral)
 		{
-			Expression* lhs = program_get_expression(program, statement.assignment.lhs);
+			printf("%s (%s, %d)\n", serialize_primitive_data(expression->literal), data_type_to_string(expression->result_data_type), (i32)expression_handle);
+		}
+		else if (expression->type == ExpressionType_Identifier)
+		{
+			printf("%.*s (%s, %d)\n", (i32)expression->identifier.name.len, expression->identifier.name.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
+		}
+		else if (expression_is_binary_operation(expression->type))
+		{
+			printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
+
+			print_expressions(program, expression->binary.lhs, indent + 1, active_mask);
+			*active_mask &= ~(1 << indent);
+			print_expressions(program, expression->binary.rhs, indent + 1, active_mask);
+		}
+		else if (expression_is_unary_operation(expression->type))
+		{
+			printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
+			print_expressions(program, expression->unary.rhs, indent + 1, active_mask);
+		}
+		else if (expression->type == ExpressionType_Assignment)
+		{
+			Expression* lhs = program_get_expression(program, expression->assignment.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
 			String identifier = lhs->identifier.name;
 
 			printf("* Variable assignment %.*s\n", (i32)identifier.len, identifier.str);
-			print_expression(program, statement.assignment.rhs, indent + 1, &active_mask);
+			print_expressions(program, expression->assignment.rhs, indent + 1, active_mask);
 		}
-		else if (statement.type == StatementType_Return)
+		else if (expression->type == ExpressionType_Declaration)
+		{
+			Expression* lhs = program_get_expression(program, expression->declaration.lhs);
+			assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+			String identifier = lhs->identifier.name;
+
+			printf("* Variable declaration %.*s\n", (i32)identifier.len, identifier.str);
+		}
+		else if (expression->type == ExpressionType_DeclarationAssignment)
+		{
+			Expression* lhs = program_get_expression(program, expression->declaration_assignment.lhs);
+			assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+			String identifier = lhs->identifier.name;
+
+			printf("* Variable declaration & assignment %.*s\n", (i32)identifier.len, identifier.str);
+			print_expressions(program, expression->declaration_assignment.rhs, indent + 1, active_mask);
+		}
+		else if (expression->type == ExpressionType_Return)
 		{
 			printf("* Return\n");
-			print_expression(program, statement.ret.expression, indent + 1, &active_mask);
+			print_expressions(program, expression->ret.rhs, indent + 1, active_mask);
 		}
-		else if (statement.type == StatementType_Block)
+		else if (expression->type == ExpressionType_Block)
 		{
 			printf("* BLOCK\n");
-			print_statements(program, j + 1, statement.block.statement_count, indent + 1);
-			i += statement.block.statement_count;
+			print_expressions(program, expression->block.first_expression, indent + 1, active_mask);
 		}
 		else
 		{
-			assert(!"Unknown statement type");
+			assert(!"Unknown expression type");
 		}
+
+		*active_mask &= ~(1 << indent);
+
+		expression_handle = expression->next;
 	}
 }
 
@@ -611,7 +620,8 @@ static void print_function(Program* program, Function function)
 {
 	printf("FUNCTION %.*s\n", (i32)function.name.len, function.name.str);
 
-	print_statements(program, function.first_statement, function.statement_count, 1);
+	i32 active_mask = 0;
+	print_expressions(program, function.first_expression, 1, &active_mask);
 	printf("\n");
 }
 

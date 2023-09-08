@@ -115,17 +115,42 @@ static LocalVariable* find_local_variable(LocalVariableContext* local_variables,
 	return 0;
 }
 
-static b32 analyze_expression(Program* program, ExpressionHandle expression_handle, StackInfo* stack_info)
+static b32 analyze_expression(Program* program, ExpressionHandle expression_handle, StackInfo* stack_info,
+	i64 first_local_variable_in_current_block)
 {
 	Expression* expression = program_get_expression(program, expression_handle);
 
-	if (expression_is_binary_operation(expression->type))
+	if (expression->type == ExpressionType_Assignment)
 	{
-		if (!analyze_expression(program, expression->binary.lhs, stack_info))
+		if (!analyze_expression(program, expression->assignment.rhs, stack_info, first_local_variable_in_current_block))
 		{
 			return false;
 		}
-		if (!analyze_expression(program, expression->binary.rhs, stack_info))
+
+		Expression* lhs_expression = program_get_expression(program, expression->assignment.lhs);
+		assert(lhs_expression->type == ExpressionType_Identifier); // Temporary.
+
+		String identifier = lhs_expression->identifier.name;
+		LocalVariable* var = find_local_variable(stack_info->current_local_variables, identifier, first_local_variable_in_current_block);
+
+		if (!var)
+		{
+			fprintf(stderr, "Undeclared identifier '%.*s'.\n", (i32)identifier.len, identifier.str);
+			return false;
+		}
+
+		if (!analyze_expression(program, expression->assignment.lhs, stack_info, first_local_variable_in_current_block))
+		{
+			return false;
+		}
+	}
+	else if (expression_is_binary_operation(expression->type))
+	{
+		if (!analyze_expression(program, expression->binary.lhs, stack_info, first_local_variable_in_current_block))
+		{
+			return false;
+		}
+		if (!analyze_expression(program, expression->binary.rhs, stack_info, first_local_variable_in_current_block))
 		{
 			return false;
 		}
@@ -137,12 +162,12 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 	}
 	else if (expression_is_unary_operation(expression->type))
 	{
-		if (!analyze_expression(program, expression->unary.expression, stack_info))
+		if (!analyze_expression(program, expression->unary.rhs, stack_info, first_local_variable_in_current_block))
 		{
 			return false;
 		}
 
-		Expression* rhs = program_get_expression(program, expression->unary.expression);
+		Expression* rhs = program_get_expression(program, expression->unary.rhs);
 		expression->result_data_type = unary_operation_result_datatype(rhs->result_data_type, expression->type);
 	}
 	else if (expression->type == ExpressionType_NumericLiteral)
@@ -166,92 +191,106 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 	return true;
 }
 
-static b32 analyze_statements(Program* program, Function* function, i64 first_statement, i64 statement_count, StackInfo* stack_info, 
+static b32 add_local_variable(Program* program, String identifier, PrimitiveDatatype data_type, StackInfo* stack_info, i64 first_local_variable_in_current_block)
+{
+	LocalVariable* var = find_local_variable(stack_info->current_local_variables, identifier, first_local_variable_in_current_block);
+
+	if (var)
+	{
+		fprintf(stderr, "Identifier '%.*s' is already declared.\n", (i32)identifier.len, identifier.str);
+		return false;
+	}
+
+	// Add to local variables.
+	stack_info->current_offset_from_frame_pointer += 8; // Increment first!
+	stack_info->stack_size = max(stack_info->stack_size, stack_info->current_offset_from_frame_pointer);
+
+	LocalVariable variable =
+	{
+		.name = identifier,
+		.offset_from_frame_pointer = stack_info->current_offset_from_frame_pointer,
+		.data_type = data_type,
+	};
+
+	array_push(&program->local_variables, variable);
+	array_push(stack_info->current_local_variables, variable);
+
+	return true;
+}
+
+static b32 analyze_top_level_expression(Program* program, ExpressionHandle expression_handle, StackInfo* stack_info,
 	i64 first_local_variable_in_current_block)
 {
-	for (i64 i = 0; i < statement_count; ++i)
+	while (expression_handle)
 	{
-		i64 j = i + first_statement;
+		Expression* expression = program_get_expression(program, expression_handle);
 
-		Statement* statement = &program->statements.items[j];
-
-		if (statement->type == StatementType_Assignment || statement->type == StatementType_Reassignment)
+		if (expression->type == ExpressionType_Declaration)
 		{
-			if (!analyze_expression(program, statement->assignment.rhs, stack_info))
+			Expression* lhs = program_get_expression(program, expression->declaration.lhs);
+			assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+			String identifier = lhs->identifier.name;
+			if (!add_local_variable(program, identifier, expression->declaration.data_type, stack_info, first_local_variable_in_current_block))
 			{
 				return false;
 			}
 
-			Expression* lhs_expression = program_get_expression(program, statement->assignment.lhs);
-			assert(lhs_expression->type == ExpressionType_Identifier); // Temporary.
-
-			String identifier = lhs_expression->identifier.name;
-			LocalVariable* var = find_local_variable(stack_info->current_local_variables, identifier, first_local_variable_in_current_block);
-
-			if (statement->type == StatementType_Assignment)
-			{
-				if (var)
-				{
-					fprintf(stderr, "Identifier '%.*s' is already declared.\n", (i32)identifier.len, identifier.str);
-					return false;
-				}
-
-				// Add to local variables.
-				stack_info->current_offset_from_frame_pointer += 8; // Increment first!
-				stack_info->stack_size = max(stack_info->stack_size, stack_info->current_offset_from_frame_pointer);
-
-				LocalVariable variable =
-				{
-					.name = identifier,
-					.offset_from_frame_pointer = stack_info->current_offset_from_frame_pointer,
-					.data_type = statement->assignment.data_type,
-				};
-
-				array_push(&program->local_variables, variable);
-				array_push(stack_info->current_local_variables, variable);
-			}
-			else
-			{
-				assert(statement->type == StatementType_Reassignment);
-
-				if (!var)
-				{
-					fprintf(stderr, "Undeclared identifier '%.*s'.\n", (i32)identifier.len, identifier.str);
-					return false;
-				}
-			}
-
-			if (!analyze_expression(program, statement->assignment.lhs, stack_info))
+			if (!analyze_expression(program, expression->declaration.lhs, stack_info, first_local_variable_in_current_block))
 			{
 				return false;
 			}
 		}
-		else if (statement->type == StatementType_Return)
+		else if (expression->type == ExpressionType_DeclarationAssignment)
 		{
-			if (!analyze_expression(program, statement->ret.expression, stack_info))
+			if (!analyze_expression(program, expression->declaration_assignment.rhs, stack_info, first_local_variable_in_current_block))
+			{
+				return false;
+			}
+
+			Expression* lhs = program_get_expression(program, expression->declaration_assignment.lhs);
+			assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+			String identifier = lhs->identifier.name;
+			if (!add_local_variable(program, identifier, expression->declaration_assignment.data_type, stack_info, first_local_variable_in_current_block))
+			{
+				return false;
+			}
+
+			if (!analyze_expression(program, expression->declaration_assignment.lhs, stack_info, first_local_variable_in_current_block))
 			{
 				return false;
 			}
 		}
-		else if (statement->type == StatementType_Block)
+		else if (expression->type == ExpressionType_Return)
+		{
+			if (!analyze_expression(program, expression->ret.rhs, stack_info, first_local_variable_in_current_block))
+			{
+				return false;
+			}
+		}
+		else if (expression->type == ExpressionType_Block)
 		{
 			i32 current_offset = stack_info->current_offset_from_frame_pointer;
 			i64 current_local_variable_count = stack_info->current_local_variables->count;
 
-			if (!analyze_statements(program, function, j + 1, statement->block.statement_count, stack_info, current_local_variable_count))
+			if (!analyze_top_level_expression(program, expression->block.first_expression, stack_info, current_local_variable_count))
 			{
 				return false;
 			}
-
-			i += statement->block.statement_count;
 
 			stack_info->current_local_variables->count = current_local_variable_count;
 			stack_info->current_offset_from_frame_pointer = current_offset;
 		}
 		else
 		{
-			assert(!"Unknown statement type");
+			if (!analyze_expression(program, expression_handle, stack_info, first_local_variable_in_current_block))
+			{
+				return false;
+			}
 		}
+
+		expression_handle = expression->next;
 	}
 
 	return true;
@@ -262,7 +301,8 @@ static b32 analyze_function(Program* program, Function* function, LocalVariableC
 	StackInfo stack_info = { .current_local_variables = local_variable_context };
 
 	function->first_local_variable = program->local_variables.count;
-	if (analyze_statements(program, function, function->first_statement, function->statement_count, &stack_info, stack_info.current_local_variables->count))
+
+	if (analyze_top_level_expression(program, function->first_expression, &stack_info, stack_info.current_local_variables->count))
 	{
 		function->local_variable_count = program->local_variables.count - function->first_local_variable;
 		function->stack_size = stack_info.stack_size;
