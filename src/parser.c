@@ -222,16 +222,19 @@ static void parse_statement(ParseContext* context, Program* program)
 
 				if (context_expect_not_eof(context))
 				{
-					ExpressionHandle expression = parse_expression(context, program, 1);
-					if (expression)
+					ExpressionHandle rhs = parse_expression(context, program, 1);
+					if (rhs)
 					{
 						if (context_expect(context, TokenType_Semicolon))
 						{
 							context_advance(context);
 
+							Expression lhs_expression = { .type = ExpressionType_Identifier, .identifier = {.name = identifier.str } };
+							ExpressionHandle lhs = push_expression(program, lhs_expression);
+
 							statement.type = StatementType_Assignment;
-							statement.assignment.identifier = identifier.str;
-							statement.assignment.expression = expression;
+							statement.assignment.lhs = lhs;
+							statement.assignment.rhs = rhs;
 							statement.assignment.data_type = token_to_datatype(token.type);
 						}
 					}
@@ -249,24 +252,24 @@ static void parse_statement(ParseContext* context, Program* program)
 
 			if (context_expect_not_eof(context))
 			{
-				ExpressionHandle expression = parse_expression(context, program, 1);
-				if (expression)
+				ExpressionHandle rhs = parse_expression(context, program, 1);
+				if (rhs)
 				{
 					if (context_expect(context, TokenType_Semicolon))
 					{
 						context_advance(context);
 
+						Expression lhs_expression = { .type = ExpressionType_Identifier, .identifier = identifier.str };
+						ExpressionHandle lhs = push_expression(program, lhs_expression);
+
 						statement.type = StatementType_Reassignment;
-						statement.assignment.identifier = identifier.str;
-						statement.assignment.expression = expression;
+						statement.assignment.lhs = lhs;
+						statement.assignment.rhs = rhs;
 
 						if (assignment.type != TokenType_Equal)
 						{
-							Expression lhs = { .type = ExpressionType_Identifier, .identifier = identifier.str };
-							ExpressionHandle lhs_handle = push_expression(program, lhs);
-
-							Expression operation = { .type = assignment_operator_infos[assignment.type], .binary = { .lhs = lhs_handle, .rhs = expression } };
-							statement.assignment.expression = push_expression(program, operation);
+							Expression operation_expression = { .type = assignment_operator_infos[assignment.type], .binary = { .lhs = lhs, .rhs = rhs } };
+							statement.assignment.rhs = push_expression(program, operation_expression);
 						}
 					}
 				}
@@ -533,7 +536,7 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 	}
 	else if (expression->type == ExpressionType_Identifier)
 	{
-		printf("%.*s (%s, %d)\n", (i32)expression->identifier.len, expression->identifier.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
+		printf("%.*s (%s, %d)\n", (i32)expression->identifier.name.len, expression->identifier.name.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
 	}
 	else if (expression_is_binary_operation(expression->type))
 	{
@@ -578,10 +581,13 @@ static void print_statements(Program* program, i64 first_statement, i64 statemen
 
 		if (statement.type == StatementType_Assignment || statement.type == StatementType_Reassignment)
 		{
-			String identifier = statement.assignment.identifier;
+			Expression* lhs = program_get_expression(program, statement.assignment.lhs);
+			assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+			String identifier = lhs->identifier.name;
 
 			printf("* Variable assignment %.*s\n", (i32)identifier.len, identifier.str);
-			print_expression(program, statement.assignment.expression, indent + 1, &active_mask);
+			print_expression(program, statement.assignment.rhs, indent + 1, &active_mask);
 		}
 		else if (statement.type == StatementType_Return)
 		{

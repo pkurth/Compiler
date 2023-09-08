@@ -355,6 +355,13 @@ static b32 expression_is_comparison_operation(ExpressionType type)
 	return (type >= ExpressionType_Equal) && (type <= ExpressionType_GreaterEqual);
 }
 
+struct IdentifierExpression
+{
+	String name;
+	i32 offset_from_frame_pointer; // Temporary: This will eventually move into the intermediate representation.
+};
+typedef struct IdentifierExpression IdentifierExpression;
+
 struct BinaryExpression
 {
 	ExpressionHandle lhs;
@@ -376,7 +383,7 @@ struct Expression
 	union
 	{
 		PrimitiveData literal;
-		String identifier;
+		IdentifierExpression identifier;
 		BinaryExpression binary;
 		UnaryExpression unary;
 	};
@@ -396,8 +403,8 @@ typedef enum StatementType StatementType;
 
 struct AssignmentStatement
 {
-	String identifier; // TODO: At some point, this will become an expression too (e.g. array indexing).
-	ExpressionHandle expression;
+	ExpressionHandle lhs;
+	ExpressionHandle rhs;
 	PrimitiveDatatype data_type; // Only set for assignment, not reassignment.
 };
 typedef struct AssignmentStatement AssignmentStatement;

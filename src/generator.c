@@ -12,26 +12,6 @@ struct LocalVariableSpan
 };
 typedef struct LocalVariableSpan LocalVariableSpan;
 
-static LocalVariable* find_local_variable(LocalVariableSpan local_variables, String name)
-{
-	LocalVariable* result = 0;
-	for (i64 i = 0; i < local_variables.variable_count; ++i)
-	{
-		if (string_equal(name, local_variables.variables[i].name))
-		{
-			result = &local_variables.variables[i];
-			break;
-		}
-	}
-
-	if (!result)
-	{
-		fprintf(stderr, "Undeclared identifier '%.*s'.\n", (i32)name.len, name.str); // Temporary. Should be before generator.
-	}
-
-	return result;
-}
-
 static void stack_push(const char* from, String* assembly)
 {
 	string_push(assembly, "    push %s\n", from);
@@ -70,11 +50,8 @@ static void generate_expression(Program* program, Expression* expression, LocalV
 {
 	if (expression->type == ExpressionType_Identifier)
 	{
-		LocalVariable* variable = find_local_variable(local_variables, expression->identifier);
-		assert(variable);
-
 		char from[32];
-		snprintf(from, sizeof(from), "QWORD [rbp-%d]", variable->offset_from_frame_pointer);
+		snprintf(from, sizeof(from), "QWORD [rbp-%d]", expression->identifier.offset_from_frame_pointer);
 
 		stack_push(from, assembly);
 	}
@@ -147,16 +124,14 @@ static void generate_statements(Program* program, i64 first_statement, i64 state
 
 		if (statement.type == StatementType_Assignment || statement.type == StatementType_Reassignment)
 		{
-			String identifier = statement.assignment.identifier;
+			Expression* lhs = program_get_expression(program, statement.assignment.lhs);
+			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
-			Expression* expression = program_get_expression(program, statement.assignment.expression);
-			generate_expression(program, expression, local_variables, assembly);
-
-			LocalVariable* variable = find_local_variable(local_variables, identifier);
-			assert(variable);
+			Expression* rhs = program_get_expression(program, statement.assignment.rhs);
+			generate_expression(program, rhs, local_variables, assembly);
 
 			stack_pop("rax", assembly);
-			string_push(assembly, "    mov [rbp-%d], rax\n", variable->offset_from_frame_pointer);
+			string_push(assembly, "    mov [rbp-%d], rax\n", lhs->identifier.offset_from_frame_pointer);
 		}
 		else if (statement.type == StatementType_Return)
 		{
