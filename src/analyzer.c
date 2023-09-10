@@ -141,8 +141,7 @@ static b32 add_local_variable(String identifier, PrimitiveDatatype data_type, St
 	return true;
 }
 
-static b32 analyze_expression(Program* program, ExpressionHandle expression_handle, StackInfo* stack_info,
-	i64 first_local_variable_in_current_block)
+static b32 analyze_expression(Program* program, ExpressionHandle expression_handle, StackInfo* stack_info)
 {
 	Expression* expression = program_get_expression(program, expression_handle);
 
@@ -150,7 +149,7 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 	{
 		AssignmentExpression e = expression->assignment;
 
-		if (!analyze_expression(program, e.rhs, stack_info, first_local_variable_in_current_block))
+		if (!analyze_expression(program, e.rhs, stack_info))
 		{
 			return false;
 		}
@@ -159,7 +158,7 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 		assert(lhs_expression->type == ExpressionType_Identifier); // Temporary.
 
 		String identifier = lhs_expression->identifier.name;
-		LocalVariable* var = find_local_variable(stack_info->current_local_variables, identifier, first_local_variable_in_current_block);
+		LocalVariable* var = find_local_variable(stack_info->current_local_variables, identifier, 0);
 
 		if (!var)
 		{
@@ -167,7 +166,7 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 			return false;
 		}
 
-		if (!analyze_expression(program, e.lhs, stack_info, first_local_variable_in_current_block))
+		if (!analyze_expression(program, e.lhs, stack_info))
 		{
 			return false;
 		}
@@ -178,11 +177,11 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 	{
 		BinaryExpression e = expression->binary;
 
-		if (!analyze_expression(program, e.lhs, stack_info, first_local_variable_in_current_block))
+		if (!analyze_expression(program, e.lhs, stack_info))
 		{
 			return false;
 		}
-		if (!analyze_expression(program, e.rhs, stack_info, first_local_variable_in_current_block))
+		if (!analyze_expression(program, e.rhs, stack_info))
 		{
 			return false;
 		}
@@ -196,7 +195,7 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 	{
 		UnaryExpression e = expression->unary;
 
-		if (!analyze_expression(program, e.rhs, stack_info, first_local_variable_in_current_block))
+		if (!analyze_expression(program, e.rhs, stack_info))
 		{
 			return false;
 		}
@@ -224,13 +223,21 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 		expression->result_data_type = var->data_type;
 		e->offset_from_frame_pointer = var->offset_from_frame_pointer;
 	}
+	else
+	{
+		assert(false);
+	}
 
 	return true;
 }
 
-static b32 analyze_top_level_expression(Program* program, ExpressionHandle expression_handle, StackInfo* stack_info,
-	i64 first_local_variable_in_current_block)
+static b32 analyze_top_level_expression(Program* program, ExpressionHandle expression_handle, StackInfo* stack_info)
 {
+	i64 first_local_variable_in_current_block = stack_info->current_local_variables->count;
+
+	i32 current_offset_from_frame_pointer = stack_info->current_offset_from_frame_pointer;
+	i64 current_local_variable_count = stack_info->current_local_variables->count;
+
 	while (expression_handle)
 	{
 		Expression* expression = program_get_expression(program, expression_handle);
@@ -243,78 +250,64 @@ static b32 analyze_top_level_expression(Program* program, ExpressionHandle expre
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
 			String identifier = lhs->identifier.name;
-			if (!add_local_variable(identifier, e.data_type, stack_info, first_local_variable_in_current_block))
-			{
-				return false;
-			}
 
-			if (!analyze_expression(program, e.lhs, stack_info, first_local_variable_in_current_block))
-			{
-				return false;
-			}
+			if (!add_local_variable(identifier, e.data_type, stack_info, first_local_variable_in_current_block)) { break; }
+			if (!analyze_expression(program, e.lhs, stack_info)) { break; }
 		}
 		else if (expression->type == ExpressionType_DeclarationAssignment)
 		{
 			DeclarationAssignmentExpression e = expression->declaration_assignment;
 
-			if (!analyze_expression(program, e.rhs, stack_info, first_local_variable_in_current_block))
-			{
-				return false;
-			}
+			if (!analyze_expression(program, e.rhs, stack_info)) { break; }
 
 			Expression* lhs = program_get_expression(program, e.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
 			String identifier = lhs->identifier.name;
-			if (!add_local_variable(identifier, e.data_type, stack_info, first_local_variable_in_current_block))
-			{
-				return false;
-			}
-
-			if (!analyze_expression(program, e.lhs, stack_info, first_local_variable_in_current_block))
-			{
-				return false;
-			}
+			if (!add_local_variable(identifier, e.data_type, stack_info, first_local_variable_in_current_block)) { break; }
+			if (!analyze_expression(program, e.lhs, stack_info)) { break; }
 		}
 		else if (expression->type == ExpressionType_Return)
 		{
-			if (!analyze_expression(program, expression->ret.rhs, stack_info, first_local_variable_in_current_block))
-			{
-				return false;
-			}
+			if (!analyze_expression(program, expression->ret.rhs, stack_info)) { break; }
 		}
 		else if (expression->type == ExpressionType_Block)
 		{
-			i32 current_offset = stack_info->current_offset_from_frame_pointer;
-			i64 current_local_variable_count = stack_info->current_local_variables->count;
+			if (!analyze_top_level_expression(program, expression->block.first_expression, stack_info)) { break; }
+		}
+		else if (expression->type == ExpressionType_Branch)
+		{
+			BranchExpression e = expression->branch;
 
-			if (!analyze_top_level_expression(program, expression->block.first_expression, stack_info, current_local_variable_count))
+			if (!analyze_expression(program, e.condition, stack_info)) { break; }
+			if (e.then_expression)
 			{
-				return false;
+				if (!analyze_top_level_expression(program, e.then_expression, stack_info)) { break; }
 			}
-
-			stack_info->current_local_variables->count = current_local_variable_count;
-			stack_info->current_offset_from_frame_pointer = current_offset;
+			if (e.else_expression)
+			{
+				if (!analyze_top_level_expression(program, e.else_expression, stack_info)) { break; }
+			}
 		}
 		else
 		{
-			if (!analyze_expression(program, expression_handle, stack_info, first_local_variable_in_current_block))
-			{
-				return false;
-			}
+			if (!analyze_expression(program, expression_handle, stack_info)) { break; }
 		}
 
 		expression_handle = expression->next;
 	}
 
-	return true;
+	stack_info->current_local_variables->count = current_local_variable_count;
+	stack_info->current_offset_from_frame_pointer = current_offset_from_frame_pointer;
+
+	return expression_handle == 0;
 }
 
 static b32 analyze_function(Program* program, Function* function, LocalVariableContext* local_variable_context)
 {
 	StackInfo stack_info = { .current_local_variables = local_variable_context };
 
-	if (analyze_top_level_expression(program, function->first_expression, &stack_info, stack_info.current_local_variables->count))
+	if (analyze_top_level_expression(program, function->first_expression, &stack_info))
 	{
 		function->stack_size = stack_info.stack_size;
 		return true;

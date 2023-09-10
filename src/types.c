@@ -45,6 +45,7 @@ static const char* token_strings[TokenType_Count] =
 	[TokenType_Unknown]				= "UNKNOWN",
 	[TokenType_EOF]					= "",
 	[TokenType_If]					= "if",
+	[TokenType_Else]				= "else",
 	[TokenType_While]				= "while",
 	[TokenType_For]					= "for",
 	[TokenType_Return]				= "return",

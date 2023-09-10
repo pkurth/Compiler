@@ -80,6 +80,7 @@ typedef struct TokenKeywordMapping TokenKeywordMapping;
 static const TokenKeywordMapping token_keyword_map[] =
 {
 	{ .str = string("if"),		.type = TokenType_If },
+	{ .str = string("else"),	.type = TokenType_Else },
 	{ .str = string("while"),	.type = TokenType_While },
 	{ .str = string("for"),		.type = TokenType_For },
 	{ .str = string("return"),	.type = TokenType_Return },

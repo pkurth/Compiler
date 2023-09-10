@@ -226,9 +226,11 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 {
 	ExpressionHandle result = ExpressionType_Error;
 
-	Token token = context_consume(context);
+	Token token = context_peek(context);
 	if (token_is_datatype(token.type))
 	{
+		context_advance(context);
+
 		if (context_expect(context, TokenType_Identifier))
 		{
 			Token identifier = context_consume(context);
@@ -275,8 +277,41 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 			}
 		}
 	}
+	else if (token.type == TokenType_If)
+	{
+		context_advance(context);
+
+		if (context_expect(context, TokenType_OpenParenthesis))
+		{
+			ExpressionHandle condition = parse_expression(context, program, 0);
+			if (condition)
+			{
+				ExpressionHandle then_expression = parse_top_level_expression(context, program);
+				if (then_expression)
+				{
+					ExpressionHandle else_expression = 0;
+
+					TokenType next_token = context_peek_type(context);
+					if (next_token == TokenType_Else)
+					{
+						context_advance(context);
+						else_expression = parse_top_level_expression(context, program);
+					}
+
+					Expression branch_expression =
+					{
+						.type = ExpressionType_Branch,
+						.branch = { .condition = condition, .then_expression = then_expression, .else_expression = else_expression }
+					};
+					result = push_expression(program, branch_expression);
+				}
+			}
+		}
+	}
 	else if (token.type == TokenType_Return)
 	{
+		context_advance(context);
+
 		if (context_expect_not_eof(context))
 		{
 			ExpressionHandle rhs = parse_expression(context, program, 0);
@@ -298,6 +333,8 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 	}
 	else if (token.type == TokenType_OpenBrace)
 	{
+		context_advance(context);
+
 		Expression block_expression =
 		{
 			.type = ExpressionType_Block
@@ -327,7 +364,6 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 	}
 	else
 	{
-		context_withdraw(context);
 		result = parse_expression(context, program, 0);
 		if (context_expect(context, TokenType_Semicolon))
 		{
@@ -565,6 +601,7 @@ static void print_expressions(Program* program, ExpressionHandle expression_hand
 			UnaryExpression e = expression->unary;
 
 			printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
+			*active_mask &= ~(1 << indent);
 			print_expressions(program, e.rhs, indent + 1, active_mask);
 		}
 		else if (expression->type == ExpressionType_Assignment)
@@ -576,7 +613,8 @@ static void print_expressions(Program* program, ExpressionHandle expression_hand
 
 			String identifier = lhs->identifier.name;
 
-			printf("* Variable assignment %.*s\n", (i32)identifier.len, identifier.str);
+			printf("Variable assignment %.*s\n", (i32)identifier.len, identifier.str);
+			*active_mask &= ~(1 << indent);
 			print_expressions(program, e.rhs, indent + 1, active_mask);
 		}
 		else if (expression->type == ExpressionType_Declaration)
@@ -588,7 +626,7 @@ static void print_expressions(Program* program, ExpressionHandle expression_hand
 
 			String identifier = lhs->identifier.name;
 
-			printf("* Variable declaration %.*s\n", (i32)identifier.len, identifier.str);
+			printf("Variable declaration %.*s\n", (i32)identifier.len, identifier.str);
 		}
 		else if (expression->type == ExpressionType_DeclarationAssignment)
 		{
@@ -599,18 +637,29 @@ static void print_expressions(Program* program, ExpressionHandle expression_hand
 
 			String identifier = lhs->identifier.name;
 
-			printf("* Variable declaration & assignment %.*s\n", (i32)identifier.len, identifier.str);
+			printf("Variable declaration & assignment %.*s\n", (i32)identifier.len, identifier.str);
+			*active_mask &= ~(1 << indent);
 			print_expressions(program, e.rhs, indent + 1, active_mask);
 		}
 		else if (expression->type == ExpressionType_Return)
 		{
-			printf("* Return\n");
+			printf("Return\n");
 			print_expressions(program, expression->ret.rhs, indent + 1, active_mask);
 		}
 		else if (expression->type == ExpressionType_Block)
 		{
-			printf("* BLOCK\n");
+			printf("BLOCK\n");
 			print_expressions(program, expression->block.first_expression, indent + 1, active_mask);
+		}
+		else if (expression->type == ExpressionType_Branch)
+		{
+			printf("if\n");
+			print_expressions(program, expression->branch.condition, indent + 1, active_mask);
+			print_expressions(program, expression->branch.then_expression, indent + 1, active_mask);
+			if (expression->branch.else_expression)
+			{
+				print_expressions(program, expression->branch.else_expression, indent + 1, active_mask);
+			}
 		}
 		else
 		{

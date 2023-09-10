@@ -164,6 +164,7 @@ enum TokenType
 
 	// Keywords.
 	TokenType_If,
+	TokenType_Else,
 	TokenType_While,
 	TokenType_For,
 	TokenType_Return,
@@ -342,6 +343,8 @@ enum ExpressionType
 	ExpressionType_Return,
 	ExpressionType_Block,
 
+	ExpressionType_Branch,
+
 	ExpressionType_Count,
 };
 typedef enum ExpressionType ExpressionType;
@@ -415,6 +418,14 @@ struct BlockExpression
 };
 typedef struct BlockExpression BlockExpression;
 
+struct BranchExpression
+{
+	ExpressionHandle condition;
+	ExpressionHandle then_expression;
+	ExpressionHandle else_expression;
+};
+typedef struct BranchExpression BranchExpression;
+
 struct Expression
 {
 	ExpressionType type;
@@ -433,6 +444,7 @@ struct Expression
 		DeclarationAssignmentExpression declaration_assignment;
 		ReturnExpression ret;
 		BlockExpression block;
+		BranchExpression branch;
 	};
 };
 typedef struct Expression Expression;

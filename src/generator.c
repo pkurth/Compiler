@@ -39,8 +39,10 @@ static void generate_return(String* assembly)
 	);
 }
 
-static void generate_expression(Program* program, Expression* expression, String* assembly)
+static void generate_expression(Program* program, ExpressionHandle expression_handle, String* assembly)
 {
+	Expression* expression = program_get_expression(program, expression_handle);
+
 	if (expression->type == ExpressionType_Identifier)
 	{
 		char from[32];
@@ -57,10 +59,8 @@ static void generate_expression(Program* program, Expression* expression, String
 	{
 		BinaryExpression e = expression->binary;
 
-		Expression* lhs = program_get_expression(program, e.lhs);
-		Expression* rhs = program_get_expression(program, e.rhs);
-		generate_expression(program, lhs, assembly);
-		generate_expression(program, rhs, assembly);
+		generate_expression(program, e.lhs, assembly);
+		generate_expression(program, e.rhs, assembly);
 
 		stack_pop("rbx", assembly);
 		stack_pop("rax", assembly);
@@ -94,8 +94,7 @@ static void generate_expression(Program* program, Expression* expression, String
 	{
 		UnaryExpression e = expression->unary;
 
-		Expression* rhs = program_get_expression(program, e.rhs);
-		generate_expression(program, rhs, assembly);
+		generate_expression(program, e.rhs, assembly);
 
 		stack_pop("rax", assembly);
 
@@ -116,12 +115,15 @@ static void generate_expression(Program* program, Expression* expression, String
 		Expression* lhs = program_get_expression(program, e.lhs);
 		assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
-		Expression* rhs = program_get_expression(program, e.rhs);
-		generate_expression(program, rhs, assembly);
+		generate_expression(program, e.rhs, assembly);
 
 		stack_pop("rax", assembly);
 		string_push(assembly, "    mov [rbp-%d], rax\n", lhs->identifier.offset_from_frame_pointer);
 		stack_push("rax", assembly);
+	}
+	else
+	{
+		assert(false);
 	}
 }
 
@@ -142,16 +144,14 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 			Expression* lhs = program_get_expression(program, e.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
-			Expression* rhs = program_get_expression(program, e.rhs);
-			generate_expression(program, rhs, assembly);
+			generate_expression(program, e.rhs, assembly);
 
 			stack_pop("rax", assembly);
 			string_push(assembly, "    mov [rbp-%d], rax\n", lhs->identifier.offset_from_frame_pointer);
 		}
 		else if (expression->type == ExpressionType_Return)
 		{
-			Expression* rhs = program_get_expression(program, expression->ret.rhs);
-			generate_expression(program, rhs, assembly);
+			generate_expression(program, expression->ret.rhs, assembly);
 
 			stack_pop("rax", assembly);
 			generate_return(assembly);
@@ -160,9 +160,37 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 		{
 			generate_top_level_expression(program, expression->block.first_expression, assembly);
 		}
+		else if (expression->type == ExpressionType_Branch)
+		{
+			BranchExpression e = expression->branch;
+
+			generate_expression(program, e.condition, assembly);
+
+			static i32 label = 0;
+
+			i32 else_label = ++label;
+			i32 end_label = ++label;
+
+			stack_pop("rax", assembly);
+			string_push(assembly, "    cmp rax, 0\n    je .L%d\n", else_label);
+
+			generate_top_level_expression(program, e.then_expression, assembly);
+			if (e.else_expression)
+			{
+				string_push(assembly, "    jmp .L%d\n", end_label);
+			}
+
+			string_push(assembly, "    .L%d:\n", else_label);
+
+			if (e.else_expression)
+			{
+				generate_top_level_expression(program, e.else_expression, assembly);
+				string_push(assembly, "    .L%d:\n", end_label);
+			}
+		}
 		else
 		{
-			generate_expression(program, expression, assembly);
+			generate_expression(program, expression_handle, assembly);
 		}
 
 		expression_handle = expression->next;
