@@ -127,6 +127,12 @@ static void generate_expression(Program* program, ExpressionHandle expression_ha
 	}
 }
 
+static i32 generate_label()
+{
+	static i32 label = 1;
+	return label++;
+}
+
 static void generate_top_level_expression(Program* program, ExpressionHandle expression_handle, String* assembly)
 {
 	while (expression_handle)
@@ -164,13 +170,10 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 		{
 			BranchExpression e = expression->branch;
 
+			i32 else_label = generate_label();
+			i32 end_label = generate_label();
+
 			generate_expression(program, e.condition, assembly);
-
-			static i32 label = 0;
-
-			i32 else_label = ++label;
-			i32 end_label = ++label;
-
 			stack_pop("rax", assembly);
 			string_push(assembly, "    cmp rax, 0\n    je .L%d\n", else_label);
 
@@ -187,6 +190,22 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 				generate_top_level_expression(program, e.else_expression, assembly);
 				string_push(assembly, "    .L%d:\n", end_label);
 			}
+		}
+		else if (expression->type == ExpressionType_Loop)
+		{
+			LoopExpression e = expression->loop;
+
+			i32 start_label = generate_label();
+			i32 condition_label = generate_label();
+
+			string_push(assembly, "    jmp .L%d\n", condition_label);
+			string_push(assembly, "    .L%d:\n", start_label);
+			generate_top_level_expression(program, e.then_expression, assembly);
+
+			string_push(assembly, "    .L%d:\n", condition_label);
+			generate_expression(program, e.condition, assembly);
+			stack_pop("rax", assembly);
+			string_push(assembly, "    cmp rax, 0\n    jne .L%d\n", start_label);
 		}
 		else
 		{

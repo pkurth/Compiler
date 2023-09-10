@@ -47,7 +47,7 @@ static Token context_consume(ParseContext* context)
 enum Associativity
 {
 	Associativity_Right = 0,
-	Associativity_Left  = 1,
+	Associativity_Left	= 1,
 };
 typedef enum Associativity Associativity;
 
@@ -62,35 +62,35 @@ typedef struct OperatorInfo OperatorInfo;
 
 static OperatorInfo binary_operator_infos[TokenType_Count] =
 {
-	[TokenType_Equal]				= { ExpressionType_Assignment,		Associativity_Right,	0 },
-	[TokenType_PipeEqual]			= { ExpressionType_BitwiseOr,		Associativity_Right,	0 },
-	[TokenType_HatEqual]			= { ExpressionType_BitwiseXor,		Associativity_Right,	0 },
-	[TokenType_AmpersandEqual]		= { ExpressionType_BitwiseAnd,		Associativity_Right,	0 },
-	[TokenType_LessLessEqual]		= { ExpressionType_LeftShift,		Associativity_Right,	0 },
-	[TokenType_GreaterGreaterEqual]	= { ExpressionType_RightShift,		Associativity_Right,	0 },
-	[TokenType_PlusEqual]			= { ExpressionType_Addition,		Associativity_Right,	0 },
-	[TokenType_MinusEqual]			= { ExpressionType_Subtraction,		Associativity_Right,	0 },
-	[TokenType_StarEqual]			= { ExpressionType_Multiplication,	Associativity_Right,	0 },
-	[TokenType_ForwardSlashEqual]	= { ExpressionType_Division,		Associativity_Right,	0 },
-	[TokenType_PercentEqual]		= { ExpressionType_Modulo,			Associativity_Right,	0 },
-	[TokenType_PipePipe]			= { ExpressionType_LogicalOr,		Associativity_Left,		1 },
-	[TokenType_AmpersandAmpersand]	= { ExpressionType_LogicalAnd,		Associativity_Left,		2 },
-	[TokenType_Pipe]				= { ExpressionType_BitwiseOr,		Associativity_Left,		3 },
-	[TokenType_Hat]					= { ExpressionType_BitwiseXor,		Associativity_Left,		4 },
-	[TokenType_Ampersand]			= { ExpressionType_BitwiseAnd,		Associativity_Left,		5 },
-	[TokenType_EqualEqual]			= { ExpressionType_Equal,			Associativity_Left,		6 },
-	[TokenType_ExclamationEqual]	= { ExpressionType_NotEqual,		Associativity_Left,		6 },
-	[TokenType_Less]				= { ExpressionType_Less,			Associativity_Left,		7 },
-	[TokenType_Greater]				= { ExpressionType_Greater,			Associativity_Left,		7 },
-	[TokenType_LessEqual]			= { ExpressionType_LessEqual,		Associativity_Left,		7 },
-	[TokenType_GreaterEqual]		= { ExpressionType_GreaterEqual,	Associativity_Left,		7 },
-	[TokenType_LessLess]			= { ExpressionType_LeftShift,		Associativity_Left,		8 },
-	[TokenType_GreaterGreater]		= { ExpressionType_RightShift,		Associativity_Left,		8 },
-	[TokenType_Plus]				= { ExpressionType_Addition,		Associativity_Left,		9 },
-	[TokenType_Minus]				= { ExpressionType_Subtraction,		Associativity_Left,		9 },
-	[TokenType_Star]				= { ExpressionType_Multiplication,	Associativity_Left,		10 },
-	[TokenType_ForwardSlash]		= { ExpressionType_Division,		Associativity_Left,		10 },
-	[TokenType_Percent]				= { ExpressionType_Modulo,			Associativity_Left,		10 },
+	[TokenType_Equal]               = { ExpressionType_Assignment,      Associativity_Right,    0 },
+    [TokenType_PipeEqual]           = { ExpressionType_BitwiseOr,       Associativity_Right,    0 },
+    [TokenType_HatEqual]			= { ExpressionType_BitwiseXor,      Associativity_Right,    0 },
+    [TokenType_AmpersandEqual]      = { ExpressionType_BitwiseAnd,      Associativity_Right,    0 },
+    [TokenType_LessLessEqual]       = { ExpressionType_LeftShift,       Associativity_Right,    0 },
+    [TokenType_GreaterGreaterEqual] = { ExpressionType_RightShift,      Associativity_Right,    0 },
+    [TokenType_PlusEqual]           = { ExpressionType_Addition,        Associativity_Right,    0 },
+    [TokenType_MinusEqual]          = { ExpressionType_Subtraction,     Associativity_Right,    0 },
+    [TokenType_StarEqual]           = { ExpressionType_Multiplication,  Associativity_Right,    0 },
+    [TokenType_ForwardSlashEqual]   = { ExpressionType_Division,        Associativity_Right,    0 },
+    [TokenType_PercentEqual]        = { ExpressionType_Modulo,          Associativity_Right,    0 },
+    [TokenType_PipePipe]            = { ExpressionType_LogicalOr,       Associativity_Left,		1 },
+    [TokenType_AmpersandAmpersand]  = { ExpressionType_LogicalAnd,      Associativity_Left,		2 },
+    [TokenType_Pipe]                = { ExpressionType_BitwiseOr,       Associativity_Left,		3 },
+    [TokenType_Hat]                 = { ExpressionType_BitwiseXor,      Associativity_Left,		4 },
+    [TokenType_Ampersand]           = { ExpressionType_BitwiseAnd,      Associativity_Left,		5 },
+    [TokenType_EqualEqual]          = { ExpressionType_Equal,           Associativity_Left,		6 },
+    [TokenType_ExclamationEqual]    = { ExpressionType_NotEqual,        Associativity_Left,		6 },
+    [TokenType_Less]                = { ExpressionType_Less,            Associativity_Left,		7 },
+    [TokenType_Greater]             = { ExpressionType_Greater,         Associativity_Left,		7 },
+    [TokenType_LessEqual]           = { ExpressionType_LessEqual,       Associativity_Left,		7 },
+    [TokenType_GreaterEqual]        = { ExpressionType_GreaterEqual,    Associativity_Left,		7 },
+    [TokenType_LessLess]            = { ExpressionType_LeftShift,       Associativity_Left,		8 },
+    [TokenType_GreaterGreater]      = { ExpressionType_RightShift,      Associativity_Left,		8 },
+    [TokenType_Plus]                = { ExpressionType_Addition,        Associativity_Left,		9 },
+    [TokenType_Minus]               = { ExpressionType_Subtraction,     Associativity_Left,		9 },
+    [TokenType_Star]                = { ExpressionType_Multiplication,  Associativity_Left,		10 },
+    [TokenType_ForwardSlash]        = { ExpressionType_Division,        Associativity_Left,		10 },
+    [TokenType_Percent]             = { ExpressionType_Modulo,          Associativity_Left,		10 },
 };
 
 static ExpressionType unary_operator_infos[TokenType_Count] =
@@ -138,7 +138,7 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 {
 	Token token = context_consume(context);
-	
+
 	if (token.type == TokenType_OpenParenthesis)
 	{
 		ExpressionHandle result = parse_expression(context, program, 1);
@@ -163,7 +163,7 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 	{
 		ExpressionHandle rhs = parse_atom(context, program);
 
-		Expression expression = { .type = unary_operator_infos[token.type], .unary = { .rhs = rhs } };
+		Expression expression = { .type = unary_operator_infos[token.type], .unary = {.rhs = rhs } };
 		return push_expression(program, expression);
 	}
 	else
@@ -196,25 +196,25 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 		}
 
 		i32 next_min_precedence = info.precedence + info.associativity;
-		
+
 		context_advance(context);
 
 		ExpressionHandle rhs = parse_expression(context, program, next_min_precedence);
 
 		if (token_is_binary_operator(next_token_type))
 		{
-			Expression operation = { .type = info.expression_type, .binary = { .lhs = lhs, .rhs = rhs } };
+			Expression operation = { .type = info.expression_type, .binary = {.lhs = lhs, .rhs = rhs } };
 			lhs = push_expression(program, operation);
 		}
 		else if (token_is_assignment_operator(next_token_type))
 		{
 			if (next_token_type != TokenType_Equal)
 			{
-				Expression operation = { .type = info.expression_type, .binary = { .lhs = lhs, .rhs = rhs } };
+				Expression operation = { .type = info.expression_type, .binary = {.lhs = lhs, .rhs = rhs } };
 				rhs = push_expression(program, operation);
 			}
 
-			Expression assignment = { .type = ExpressionType_Assignment, .assignment = { .lhs = lhs, .rhs = rhs } };
+			Expression assignment = { .type = ExpressionType_Assignment, .assignment = {.lhs = lhs, .rhs = rhs } };
 			lhs = push_expression(program, assignment);
 		}
 	}
@@ -301,9 +301,31 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 					Expression branch_expression =
 					{
 						.type = ExpressionType_Branch,
-						.branch = { .condition = condition, .then_expression = then_expression, .else_expression = else_expression }
+						.branch = {.condition = condition, .then_expression = then_expression, .else_expression = else_expression }
 					};
 					result = push_expression(program, branch_expression);
+				}
+			}
+		}
+	}
+	else if (token.type == TokenType_While)
+	{
+		context_advance(context);
+
+		if (context_expect(context, TokenType_OpenParenthesis))
+		{
+			ExpressionHandle condition = parse_expression(context, program, 0);
+			if (condition)
+			{
+				ExpressionHandle then_expression = parse_top_level_expression(context, program);
+				if (then_expression)
+				{
+					Expression loop_expression =
+					{
+						.type = ExpressionType_Loop,
+						.loop = {.condition = condition, .then_expression = then_expression }
+					};
+					result = push_expression(program, loop_expression);
 				}
 			}
 		}
@@ -324,7 +346,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 					Expression return_expression =
 					{
 						.type = ExpressionType_Return,
-						.ret = { .rhs = rhs }
+						.ret = {.rhs = rhs }
 					};
 					result = push_expression(program, return_expression);
 				}
@@ -472,7 +494,7 @@ static b32 parse_function(ParseContext* context, Program* program)
 	{
 		return false;
 	}
-	
+
 	if (context_expect(context, TokenType_Arrow))
 	{
 		context_advance(context);
@@ -531,144 +553,179 @@ void free_program(Program* program)
 
 static const char* operator_strings[ExpressionType_Count] =
 {
-	[ExpressionType_Error]			= "",
-	[ExpressionType_LogicalOr]		= "||",
-	[ExpressionType_LogicalAnd]		= "&&",
-	[ExpressionType_BitwiseOr]		= "|",
-	[ExpressionType_BitwiseXor]		= "^",
-	[ExpressionType_BitwiseAnd]		= "&",
-	[ExpressionType_Equal]			= "==",
-	[ExpressionType_NotEqual]		= "!=",
-	[ExpressionType_Less]			= "<",
-	[ExpressionType_Greater]		= ">",
-	[ExpressionType_LessEqual]		= "<=",
-	[ExpressionType_GreaterEqual]	= ">=",
-	[ExpressionType_LeftShift]		= "<<",
-	[ExpressionType_RightShift]		= ">>",
-	[ExpressionType_Addition]		= "+",
-	[ExpressionType_Subtraction]	= "-",
+	[ExpressionType_Error] = "",
+	[ExpressionType_LogicalOr] = "||",
+	[ExpressionType_LogicalAnd] = "&&",
+	[ExpressionType_BitwiseOr] = "|",
+	[ExpressionType_BitwiseXor] = "^",
+	[ExpressionType_BitwiseAnd] = "&",
+	[ExpressionType_Equal] = "==",
+	[ExpressionType_NotEqual] = "!=",
+	[ExpressionType_Less] = "<",
+	[ExpressionType_Greater] = ">",
+	[ExpressionType_LessEqual] = "<=",
+	[ExpressionType_GreaterEqual] = ">=",
+	[ExpressionType_LeftShift] = "<<",
+	[ExpressionType_RightShift] = ">>",
+	[ExpressionType_Addition] = "+",
+	[ExpressionType_Subtraction] = "-",
 	[ExpressionType_Multiplication] = "*",
-	[ExpressionType_Division]		= "/",
-	[ExpressionType_Modulo]			= "%",
+	[ExpressionType_Division] = "/",
+	[ExpressionType_Modulo] = "%",
 
-	[ExpressionType_Negate]			= "-",
-	[ExpressionType_BitwiseNot]		= "~",
-	[ExpressionType_Not]			= "!",
+	[ExpressionType_Negate] = "-",
+	[ExpressionType_BitwiseNot] = "~",
+	[ExpressionType_Not] = "!",
 };
 
-static void print_expressions(Program* program, ExpressionHandle expression_handle, i32 indent, i32* active_mask)
+static void set_bit(i32* mask, i32 bit_index)
 {
-	while (expression_handle)
+	*mask |= (1 << bit_index);
+}
+
+static void clear_bit(i32* mask, i32 bit_index)
+{
+	*mask &= ~(1 << bit_index);
+}
+
+static b32 is_bit_set(i32 mask, i32 bit_index)
+{
+	return (mask & (1 << bit_index)) != 0;
+}
+
+static void print_expression(Program* program, ExpressionHandle expression_handle, i32 indent, i32* active_mask)
+{
+	Expression* expression = program_get_expression(program, expression_handle);
+	if (expression->type == ExpressionType_Error)
 	{
-		for (i32 i = 0; i < indent; ++i)
+		return;
+	}
+
+	for (i32 i = 0; i <= indent; ++i)
+	{
+		b32 last = (i == indent);
+		b32 is_active = is_bit_set(*active_mask, i);
+		printf((is_active || last) ? "|" : " ");
+		printf(last ? "-> " : "   ");
+	}
+
+	if (expression->type == ExpressionType_NumericLiteral)
+	{
+		printf("%s (%s, %d)\n", serialize_primitive_data(expression->literal), data_type_to_string(expression->result_data_type), (i32)expression_handle);
+	}
+	else if (expression->type == ExpressionType_Identifier)
+	{
+		IdentifierExpression e = expression->identifier;
+
+		printf("%.*s (%s, %d)\n", (i32)e.name.len, e.name.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
+	}
+	else if (expression_is_binary_operation(expression->type))
+	{
+		BinaryExpression e = expression->binary;
+
+		printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
+
+		set_bit(active_mask, indent + 1);
+		print_expression(program, e.lhs, indent + 1, active_mask);
+
+		clear_bit(active_mask, indent + 1);
+		print_expression(program, e.rhs, indent + 1, active_mask);
+	}
+	else if (expression_is_unary_operation(expression->type))
+	{
+		UnaryExpression e = expression->unary;
+
+		printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
+		print_expression(program, e.rhs, indent + 1, active_mask);
+	}
+	else if (expression->type == ExpressionType_Assignment)
+	{
+		AssignmentExpression e = expression->assignment;
+
+		Expression* lhs = program_get_expression(program, e.lhs);
+		assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+		String identifier = lhs->identifier.name;
+
+		printf("Variable assignment %.*s\n", (i32)identifier.len, identifier.str);
+		print_expression(program, e.rhs, indent + 1, active_mask);
+	}
+	else if (expression->type == ExpressionType_Declaration)
+	{
+		DeclarationExpression e = expression->declaration;
+
+		Expression* lhs = program_get_expression(program, e.lhs);
+		assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+		String identifier = lhs->identifier.name;
+
+		printf("Variable declaration %.*s\n", (i32)identifier.len, identifier.str);
+	}
+	else if (expression->type == ExpressionType_DeclarationAssignment)
+	{
+		DeclarationAssignmentExpression e = expression->declaration_assignment;
+
+		Expression* lhs = program_get_expression(program, e.lhs);
+		assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+		String identifier = lhs->identifier.name;
+
+		printf("Variable declaration & assignment %.*s\n", (i32)identifier.len, identifier.str);
+		print_expression(program, e.rhs, indent + 1, active_mask);
+	}
+	else if (expression->type == ExpressionType_Return)
+	{
+		printf("Return\n");
+		print_expression(program, expression->ret.rhs, indent + 1, active_mask);
+	}
+	else if (expression->type == ExpressionType_Block)
+	{
+		printf("Block\n");
+
+		set_bit(active_mask, indent + 1);
+		ExpressionHandle current = expression->block.first_expression;
+		while (current)
 		{
-			i32 last = (i == indent - 1);
-			i32 is_active = ((1 << i) & *active_mask);
-			printf((is_active || last) ? "|" : " ");
-			printf(last ? "-> " : "   ");
-		}
+			ExpressionHandle next = program_get_expression(program, current)->next;
+			if (!next) { clear_bit(active_mask, indent + 1); }
 
-		Expression* expression = program_get_expression(program, expression_handle);
-		if (expression->type == ExpressionType_Error)
+			print_expression(program, current, indent + 1, active_mask);
+			current = next;
+		}
+	}
+	else if (expression->type == ExpressionType_Branch)
+	{
+		BranchExpression e = expression->branch;
+
+		printf("Branch\n");
+
+		set_bit(active_mask, indent + 1);
+		print_expression(program, e.condition, indent + 1, active_mask);
+
+		if (!e.else_expression) { clear_bit(active_mask, indent + 1); }
+		print_expression(program, e.then_expression, indent + 1, active_mask);
+
+		if (e.else_expression)
 		{
-			return;
+			clear_bit(active_mask, indent + 1);
+			print_expression(program, e.else_expression, indent + 1, active_mask);
 		}
+	}
+	else if (expression->type == ExpressionType_Loop)
+	{
+		LoopExpression e = expression->loop;
 
-		*active_mask |= (1 << indent);
+		printf("Loop\n");
 
-		if (expression->type == ExpressionType_NumericLiteral)
-		{
-			printf("%s (%s, %d)\n", serialize_primitive_data(expression->literal), data_type_to_string(expression->result_data_type), (i32)expression_handle);
-		}
-		else if (expression->type == ExpressionType_Identifier)
-		{
-			IdentifierExpression e = expression->identifier;
+		set_bit(active_mask, indent + 1);
+		print_expression(program, e.condition, indent + 1, active_mask);
 
-			printf("%.*s (%s, %d)\n", (i32)e.name.len, e.name.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
-		}
-		else if (expression_is_binary_operation(expression->type))
-		{
-			BinaryExpression e = expression->binary;
-
-			printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
-
-			print_expressions(program, e.lhs, indent + 1, active_mask);
-			*active_mask &= ~(1 << indent);
-			print_expressions(program, e.rhs, indent + 1, active_mask);
-		}
-		else if (expression_is_unary_operation(expression->type))
-		{
-			UnaryExpression e = expression->unary;
-
-			printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
-			*active_mask &= ~(1 << indent);
-			print_expressions(program, e.rhs, indent + 1, active_mask);
-		}
-		else if (expression->type == ExpressionType_Assignment)
-		{
-			AssignmentExpression e = expression->assignment;
-
-			Expression* lhs = program_get_expression(program, e.lhs);
-			assert(lhs->type == ExpressionType_Identifier); // Temporary.
-
-			String identifier = lhs->identifier.name;
-
-			printf("Variable assignment %.*s\n", (i32)identifier.len, identifier.str);
-			*active_mask &= ~(1 << indent);
-			print_expressions(program, e.rhs, indent + 1, active_mask);
-		}
-		else if (expression->type == ExpressionType_Declaration)
-		{
-			DeclarationExpression e = expression->declaration;
-
-			Expression* lhs = program_get_expression(program, e.lhs);
-			assert(lhs->type == ExpressionType_Identifier); // Temporary.
-
-			String identifier = lhs->identifier.name;
-
-			printf("Variable declaration %.*s\n", (i32)identifier.len, identifier.str);
-		}
-		else if (expression->type == ExpressionType_DeclarationAssignment)
-		{
-			DeclarationAssignmentExpression e = expression->declaration_assignment;
-
-			Expression* lhs = program_get_expression(program, e.lhs);
-			assert(lhs->type == ExpressionType_Identifier); // Temporary.
-
-			String identifier = lhs->identifier.name;
-
-			printf("Variable declaration & assignment %.*s\n", (i32)identifier.len, identifier.str);
-			*active_mask &= ~(1 << indent);
-			print_expressions(program, e.rhs, indent + 1, active_mask);
-		}
-		else if (expression->type == ExpressionType_Return)
-		{
-			printf("Return\n");
-			print_expressions(program, expression->ret.rhs, indent + 1, active_mask);
-		}
-		else if (expression->type == ExpressionType_Block)
-		{
-			printf("BLOCK\n");
-			print_expressions(program, expression->block.first_expression, indent + 1, active_mask);
-		}
-		else if (expression->type == ExpressionType_Branch)
-		{
-			printf("if\n");
-			print_expressions(program, expression->branch.condition, indent + 1, active_mask);
-			print_expressions(program, expression->branch.then_expression, indent + 1, active_mask);
-			if (expression->branch.else_expression)
-			{
-				print_expressions(program, expression->branch.else_expression, indent + 1, active_mask);
-			}
-		}
-		else
-		{
-			assert(!"Unknown expression type");
-		}
-
-		*active_mask &= ~(1 << indent);
-
-		expression_handle = expression->next;
+		clear_bit(active_mask, indent + 1);
+		print_expression(program, e.then_expression, indent + 1, active_mask);
+	}
+	else
+	{
+		assert(!"Unknown expression type");
 	}
 }
 
@@ -677,7 +734,7 @@ static void print_function(Program* program, Function function)
 	printf("FUNCTION %.*s\n", (i32)function.name.len, function.name.str);
 
 	i32 active_mask = 0;
-	print_expressions(program, function.first_expression, 1, &active_mask);
+	print_expression(program, function.first_expression, 0, &active_mask);
 	printf("\n");
 }
 

@@ -289,6 +289,16 @@ static b32 analyze_top_level_expression(Program* program, ExpressionHandle expre
 				if (!analyze_top_level_expression(program, e.else_expression, stack_info)) { break; }
 			}
 		}
+		else if (expression->type == ExpressionType_Loop)
+		{
+			LoopExpression e = expression->loop;
+
+			if (!analyze_expression(program, e.condition, stack_info)) { break; }
+			if (e.then_expression)
+			{
+				if (!analyze_top_level_expression(program, e.then_expression, stack_info)) { break; }
+			}
+		}
 		else
 		{
 			if (!analyze_expression(program, expression_handle, stack_info)) { break; }

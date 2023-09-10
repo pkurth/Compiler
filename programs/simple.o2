@@ -31,8 +31,20 @@
 	else
 		b = 0;
 
+
+	i32 v = 7;
+	
+	i32 x = 0;
+	while (x < 10)
+	{
+		v *= 2;
+		x += 1;
+	}
+
+	// v == 7168
+
 	// comment
 	i32 c = 33 >= 10;
 
-	return b;
+	return v;
 }

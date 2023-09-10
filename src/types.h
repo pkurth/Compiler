@@ -344,6 +344,7 @@ enum ExpressionType
 	ExpressionType_Block,
 
 	ExpressionType_Branch,
+	ExpressionType_Loop,
 
 	ExpressionType_Count,
 };
@@ -426,6 +427,13 @@ struct BranchExpression
 };
 typedef struct BranchExpression BranchExpression;
 
+struct LoopExpression
+{
+	ExpressionHandle condition;
+	ExpressionHandle then_expression;
+};
+typedef struct LoopExpression LoopExpression;
+
 struct Expression
 {
 	ExpressionType type;
@@ -445,6 +453,7 @@ struct Expression
 		ReturnExpression ret;
 		BlockExpression block;
 		BranchExpression branch;
+		LoopExpression loop;
 	};
 };
 typedef struct Expression Expression;
