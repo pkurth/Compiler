@@ -63,6 +63,16 @@ typedef struct OperatorInfo OperatorInfo;
 static OperatorInfo binary_operator_infos[TokenType_Count] =
 {
 	[TokenType_Equal]				= { ExpressionType_Assignment,		Associativity_Right,	0 },
+	[TokenType_PipeEqual]			= { ExpressionType_BitwiseOr,		Associativity_Right,	0 },
+	[TokenType_HatEqual]			= { ExpressionType_BitwiseXor,		Associativity_Right,	0 },
+	[TokenType_AmpersandEqual]		= { ExpressionType_BitwiseAnd,		Associativity_Right,	0 },
+	[TokenType_LessLessEqual]		= { ExpressionType_LeftShift,		Associativity_Right,	0 },
+	[TokenType_GreaterGreaterEqual]	= { ExpressionType_RightShift,		Associativity_Right,	0 },
+	[TokenType_PlusEqual]			= { ExpressionType_Addition,		Associativity_Right,	0 },
+	[TokenType_MinusEqual]			= { ExpressionType_Subtraction,		Associativity_Right,	0 },
+	[TokenType_StarEqual]			= { ExpressionType_Multiplication,	Associativity_Right,	0 },
+	[TokenType_ForwardSlashEqual]	= { ExpressionType_Division,		Associativity_Right,	0 },
+	[TokenType_PercentEqual]		= { ExpressionType_Modulo,			Associativity_Right,	0 },
 	[TokenType_PipePipe]			= { ExpressionType_LogicalOr,		Associativity_Left,		1 },
 	[TokenType_AmpersandAmpersand]	= { ExpressionType_LogicalAnd,		Associativity_Left,		2 },
 	[TokenType_Pipe]				= { ExpressionType_BitwiseOr,		Associativity_Left,		3 },
@@ -88,20 +98,6 @@ static ExpressionType unary_operator_infos[TokenType_Count] =
 	[TokenType_Minus]				= ExpressionType_Negate,
 	[TokenType_Tilde]				= ExpressionType_BitwiseNot,
 	[TokenType_Exclamation]			= ExpressionType_Not,
-};
-
-static ExpressionType assignment_operator_infos[TokenType_Count] =
-{
-	[TokenType_PipeEqual]			= ExpressionType_BitwiseOr,
-	[TokenType_HatEqual]			= ExpressionType_BitwiseXor,
-	[TokenType_AmpersandEqual]		= ExpressionType_BitwiseAnd,
-	[TokenType_LessLessEqual]		= ExpressionType_LeftShift,
-	[TokenType_GreaterGreaterEqual]	= ExpressionType_RightShift,
-	[TokenType_PlusEqual]			= ExpressionType_Addition,
-	[TokenType_MinusEqual]			= ExpressionType_Subtraction,
-	[TokenType_StarEqual]			= ExpressionType_Multiplication,
-	[TokenType_ForwardSlashEqual]	= ExpressionType_Division,
-	[TokenType_PercentEqual]		= ExpressionType_Modulo,
 };
 
 static b32 context_expect_not_eof(ParseContext* context)
@@ -207,18 +203,18 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 
 		if (token_is_binary_operator(next_token_type))
 		{
-			Expression operation = { .type = info.expression_type, .binary = {.lhs = lhs, .rhs = rhs } };
+			Expression operation = { .type = info.expression_type, .binary = { .lhs = lhs, .rhs = rhs } };
 			lhs = push_expression(program, operation);
 		}
 		else if (token_is_assignment_operator(next_token_type))
 		{
 			if (next_token_type != TokenType_Equal)
 			{
-				Expression operation = { .type = assignment_operator_infos[next_token_type], .binary = { .lhs = lhs, .rhs = rhs } };
+				Expression operation = { .type = info.expression_type, .binary = { .lhs = lhs, .rhs = rhs } };
 				rhs = push_expression(program, operation);
 			}
 
-			Expression assignment = { .type = ExpressionType_Assignment, .assignment = {.lhs = lhs, .rhs = rhs } };
+			Expression assignment = { .type = ExpressionType_Assignment, .assignment = { .lhs = lhs, .rhs = rhs } };
 			lhs = push_expression(program, assignment);
 		}
 	}
