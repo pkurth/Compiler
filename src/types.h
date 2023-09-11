@@ -88,28 +88,55 @@ static void string_push(String* string, const char* format, ...)
 
 
 #if 0
-// Dummy hash map.
-#define HashMap(KeyType, ValueType)													\
+#define HashMap(KeyType, ValueType, capacity)										\
 	struct																			\
 	{																				\
-		struct KeyValue																\
+		i64 (*hash_function)(KeyType);												\
+		struct KeyIndexPair															\
 		{																			\
 			KeyType key;															\
-			ValueType value;														\
-		};																			\
-		struct KeyValue dummy;														\
-		DynamicArray(struct KeyValue) items;										\
+			i64 index;																\
+		} keys[capacity];															\
+		ValueType values[capacity];													\
+		i64 count;																	\
 	}
 
-#define hashmap_insert(map, insert_key, insert_value)								\
+#define hashmap_insert(map, key, value)												\
 	do																				\
 	{																				\
-		(map)->dummy.key = insert_key;												\
-		(map)->dummy.value = insert_value;											\
-		array_push(&((map)->items), (map)->dummy);									\
+		i64 hash = (map)->hash_function(key);										\
+		i64 capacity = arraysize((map)->keys);										\
+		i64 key_index = hash % capacity;											\
+		i64 value_index = (map)->count++;											\
+		(map)->values[value_index] = value;											\
+		(map)->keys[key_index].key = key;											\
+		(map)->keys[key_index].index = value_index;									\
 	} while (0)
-#endif
 
+//#define hashmap_lookup(map, key) \
+//	(map)->values[(map)->keys[(map)->hash_function(key) % arraysize((map)->keys)].index]
+
+static i64 hash_string(String str)
+{
+	return str.len * str.str[0];
+}
+
+static void test()
+{
+	typedef HashMap(String, int, 512) StringToIntMap;
+
+	StringToIntMap map = { &hash_string };
+
+	String key = string_from_cstr("Hallo Welt");
+	hashmap_insert(&map, key, 12);
+
+	int key = hashmap_lookup(&map, key);
+
+	int a = 0;
+
+	int index = (int i = 3, i);
+}
+#endif
 
 enum PrimitiveDatatype
 {

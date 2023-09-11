@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "analyzer.h"
 #include "generator.h"
+#include "platform.h"
 
 static String read_file(const char* filename)
 {
@@ -101,6 +102,8 @@ i32 main(i32 argc, char** argv)
 	String obj_path = { .str = argv[2], strlen(argv[2]) };
 	String obj_dir = path_get_parent(obj_path);
 	String obj_stem = path_get_stem(obj_path);
+
+	create_directory(obj_dir);
 
 	char asm_path[128];
 	snprintf(asm_path, sizeof(asm_path), "%.*s/%.*s.asm", (i32)obj_dir.len, obj_dir.str, (i32)obj_stem.len, obj_stem.str);
