@@ -1,5 +1,6 @@
 #include "parser.h"
 
+#include <ctype.h>
 #include <assert.h>
 
 
@@ -14,17 +15,18 @@ struct ParseContext
 {
 	TokenStream tokens;
 	i64 current_token;
+	String program_string;
 };
 typedef struct ParseContext ParseContext;
 
 static Token context_peek(ParseContext* context)
 {
-	return context->tokens.items[context->current_token];
+	return context->tokens.tokens.items[context->current_token];
 }
 
 static TokenType context_peek_type(ParseContext* context)
 {
-	return context->tokens.items[context->current_token].type;
+	return context->tokens.tokens.items[context->current_token].type;
 }
 
 static void context_advance(ParseContext* context)
@@ -39,7 +41,7 @@ static void context_withdraw(ParseContext* context)
 
 static Token context_consume(ParseContext* context)
 {
-	return context->tokens.items[context->current_token++];
+	return context->tokens.tokens.items[context->current_token++];
 }
 
 
@@ -100,6 +102,28 @@ static ExpressionType unary_operator_infos[TokenType_Count] =
 	[TokenType_Exclamation]			= ExpressionType_Not,
 };
 
+static String get_line(String program_string, i32 character_index)
+{
+	i64 left = character_index;
+	while (left > 0 && program_string.str[left - 1] != '\n')
+	{
+		--left;
+	}
+	while (isspace(program_string.str[left]))
+	{
+		++left;
+	}
+
+	i64 right = character_index;
+	while (right < program_string.len && program_string.str[right + 1] != '\n')
+	{
+		++right;
+	}
+
+	String result = { .str = program_string.str + left, .len = right - left };
+	return result;
+}
+
 static b32 context_expect_not_eof(ParseContext* context)
 {
 	b32 result = context_peek_type(context) != TokenType_EOF;
@@ -110,6 +134,15 @@ static b32 context_expect_not_eof(ParseContext* context)
 	return result;
 }
 
+static void print_line_error(ParseContext* context, Token unexpected_token)
+{
+	String line = get_line(context->program_string, unexpected_token.global_character_index);
+	fprintf(stderr, "%.*s\n", (i32)line.len, line.str);
+
+	i32 column = (i32)((context->program_string.str + unexpected_token.global_character_index) - line.str);
+	fprintf(stderr, "%*s^\n", column, "");
+}
+
 static b32 context_expect(ParseContext* context, TokenType expected)
 {
 	b32 result = context_peek_type(context) == expected;
@@ -118,17 +151,18 @@ static b32 context_expect(ParseContext* context, TokenType expected)
 		Token unexpected_token = context_peek(context);
 		if (expected == TokenType_Identifier)
 		{
-			fprintf(stderr, "LINE %d: Expected identifier, got '%.*s'.\n", unexpected_token.line, (i32)unexpected_token.str.len, unexpected_token.str.str);
+			fprintf(stderr, "LINE %d: Expected identifier, got '%s'.\n", unexpected_token.line, token_type_to_string(unexpected_token.type));
 		}
 		else if (expected == TokenType_NumericLiteral)
 		{
-			fprintf(stderr, "LINE %d: Expected literal, got '%.*s'.\n", unexpected_token.line, (i32)unexpected_token.str.len, unexpected_token.str.str);
+			fprintf(stderr, "LINE %d: Expected literal, got '%s'.\n", unexpected_token.line, token_type_to_string(unexpected_token.type));
 		}
 		else
 		{
-			const char* expected_str = token_type_to_string(expected);
-			fprintf(stderr, "LINE %d: Expected '%s', got '%.*s'.\n", unexpected_token.line, expected_str, (i32)unexpected_token.str.len, unexpected_token.str.str);
+			fprintf(stderr, "LINE %d: Expected '%s', got '%s'.\n", unexpected_token.line, token_type_to_string(expected), token_type_to_string(unexpected_token.type));
 		}
+
+		print_line_error(context, unexpected_token);
 	}
 	return result;
 }
@@ -151,12 +185,14 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 	}
 	else if (token.type == TokenType_NumericLiteral)
 	{
-		Expression expression = { .type = ExpressionType_NumericLiteral, .literal = token.data, .result_data_type = token.data.type };
+		PrimitiveData literal = context->tokens.literals.items[token.data_index];
+		Expression expression = { .type = ExpressionType_NumericLiteral, .literal = literal, .result_data_type = literal.type };
 		return push_expression(program, expression);
 	}
 	else if (token.type == TokenType_Identifier)
 	{
-		Expression expression = { .type = ExpressionType_Identifier, .identifier = token.str, .result_data_type = PrimitiveDatatype_I32 }; // TODO: result_data_type.
+		String identifier = context->tokens.identifiers.items[token.data_index];
+		Expression expression = { .type = ExpressionType_Identifier, .identifier = identifier, .result_data_type = PrimitiveDatatype_I32 }; // TODO: result_data_type.
 		return push_expression(program, expression);
 	}
 	else if (token_is_unary_operator(token.type) && context_expect_not_eof(context))
@@ -168,7 +204,9 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 	}
 	else
 	{
-		fprintf(stderr, "LINE %d: Unexpected token '%.*s'.\n", token.line, (i32)token.str.len, token.str.str);
+		fprintf(stderr, "LINE %d: Unexpected token '%s'.\n", token.line, token_type_to_string(token.type));
+
+		print_line_error(context, token);
 	}
 
 	return 0;
@@ -233,9 +271,10 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 
 		if (context_expect(context, TokenType_Identifier))
 		{
-			Token identifier = context_consume(context);
+			Token identifier_token = context_consume(context);
+			String identifier = context->tokens.identifiers.items[identifier_token.data_index];
 
-			Expression lhs_expression = { .type = ExpressionType_Identifier, .identifier = {.name = identifier.str } };
+			Expression lhs_expression = { .type = ExpressionType_Identifier, .identifier = { .name = identifier } };
 			ExpressionHandle lhs = push_expression(program, lhs_expression);
 
 			TokenType next = context_peek_type(context);
@@ -260,7 +299,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 					Expression expression =
 					{
 						.type = ExpressionType_DeclarationAssignment,
-						.declaration_assignment = {.data_type = token_to_datatype(token.type), .lhs = lhs, .rhs = rhs }
+						.declaration_assignment = { .data_type = token_to_datatype(token.type), .lhs = lhs, .rhs = rhs }
 					};
 					result = push_expression(program, expression);
 				}
@@ -273,7 +312,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 			else
 			{
 				Token unexpected_token = context_peek(context);
-				fprintf(stderr, "LINE %d: Unexpected token '%.*s'.\n", unexpected_token.line, (i32)unexpected_token.str.len, unexpected_token.str.str);
+				print_line_error(context, unexpected_token);
 			}
 		}
 	}
@@ -429,7 +468,8 @@ static b32 parse_function_parameters(ParseContext* context, Function* function, 
 			{
 				return false;
 			}
-			Token identifier = context_consume(context);
+			Token identifier_token = context_consume(context);
+			String identifier = context->tokens.identifiers.items[identifier_token.data_index];
 
 			FunctionParameter parameter = { .name = identifier.str };
 			array_push(&program->function_parameters, parameter);
@@ -507,7 +547,9 @@ static b32 parse_function(ParseContext* context, Program* program)
 
 	if (context_expect(context, TokenType_Identifier))
 	{
-		function.name = context_consume(context).str;
+		Token identifier_token = context_consume(context);
+		String identifier = context->tokens.identifiers.items[identifier_token.data_index];
+		function.name = identifier;
 	}
 
 	if (context_expect(context, TokenType_Equal))
@@ -527,10 +569,10 @@ static b32 parse_function(ParseContext* context, Program* program)
 	return true;
 }
 
-Program parse(TokenStream stream)
+Program parse(TokenStream stream, String program_string)
 {
 	Program program = { 0 };
-	ParseContext context = { stream, 0 };
+	ParseContext context = { stream, 0, program_string };
 
 	push_expression(&program, (Expression) { .type = ExpressionType_Error }); // Dummy.
 

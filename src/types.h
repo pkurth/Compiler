@@ -313,13 +313,18 @@ struct Token
 {
 	TokenType type;
 	i32 line;
-
-	String str;
-	PrimitiveData data;
+	i32 global_character_index;
+	i32 data_index;
 };
 typedef struct Token Token;
 
-typedef DynamicArray(Token) TokenStream;
+struct TokenStream
+{
+	DynamicArray(Token) tokens;
+	DynamicArray(String) identifiers;
+	DynamicArray(PrimitiveData) literals;
+};
+typedef struct TokenStream TokenStream;
 
 
 

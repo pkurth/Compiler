@@ -116,7 +116,7 @@ i32 main(i32 argc, char** argv)
 		TokenStream tokens = tokenize(contents);
 		print_tokens(&tokens);
 
-		Program program = parse(tokens);
+		Program program = parse(tokens, contents);
 		if (!program.has_errors)
 		{
 			analyze(&program);
