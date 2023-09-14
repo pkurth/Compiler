@@ -309,11 +309,17 @@ static b32 token_is_unary_operator(TokenType type)
 const char* token_type_to_string(TokenType type);
 PrimitiveDatatype token_to_datatype(TokenType type);
 
+struct SourceLocation
+{
+	i32 line;
+	i32 global_character_index;
+};
+typedef struct SourceLocation SourceLocation;
+
 struct Token
 {
 	TokenType type;
-	i32 line;
-	i32 global_character_index;
+	SourceLocation source_location;
 	i32 data_index;
 };
 typedef struct Token Token;
@@ -469,6 +475,7 @@ typedef struct LoopExpression LoopExpression;
 struct Expression
 {
 	ExpressionType type;
+	SourceLocation source_location;
 	PrimitiveDatatype result_data_type;
 
 	ExpressionHandle next;
@@ -501,6 +508,7 @@ struct LocalVariable
 	String name;
 	i32 offset_from_frame_pointer;
 	PrimitiveDatatype data_type;
+	SourceLocation source_location;
 };
 typedef struct LocalVariable LocalVariable;
 
@@ -522,7 +530,6 @@ struct Program
 {
 	DynamicArray(Function) functions;
 	DynamicArray(FunctionParameter) function_parameters;
-	//DynamicArray(LocalVariable) local_variables;
 	DynamicArray(Expression) expressions;
 
 	b32 has_errors;

@@ -122,7 +122,11 @@ TokenStream tokenize(String contents)
 		}
 
 		String token_string = { .str = contents.str + c_index, .len = 1 };
-		Token token = { .type = character_to_token_type[c], .line = line, .global_character_index = (i32)c_index };
+		Token token = 
+		{ 
+			.type = character_to_token_type[c], 
+			.source_location = {.line = line, .global_character_index = (i32)c_index }
+		};
 
 		TokenContinuation continuation;
 

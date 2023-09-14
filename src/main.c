@@ -119,7 +119,7 @@ i32 main(i32 argc, char** argv)
 		Program program = parse(tokens, contents);
 		if (!program.has_errors)
 		{
-			analyze(&program);
+			analyze(&program, contents);
 			if (!program.has_errors)
 			{
 				print_program(&program);
