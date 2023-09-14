@@ -119,3 +119,211 @@ PrimitiveDatatype token_to_datatype(TokenType type)
 }
 
 
+
+
+void free_program(Program* program)
+{
+	array_free(&program->functions);
+	array_free(&program->function_parameters);
+	array_free(&program->expressions);
+
+	string_free(&program->source_code);
+}
+
+
+static const char* operator_strings[ExpressionType_Count] =
+{
+	[ExpressionType_Error]			= "",
+	[ExpressionType_LogicalOr]		= "||",
+	[ExpressionType_LogicalAnd]		= "&&",
+	[ExpressionType_BitwiseOr]		= "|",
+	[ExpressionType_BitwiseXor]		= "^",
+	[ExpressionType_BitwiseAnd]		= "&",
+	[ExpressionType_Equal]			= "==",
+	[ExpressionType_NotEqual]		= "!=",
+	[ExpressionType_Less]			= "<",
+	[ExpressionType_Greater]		= ">",
+	[ExpressionType_LessEqual]		= "<=",
+	[ExpressionType_GreaterEqual]	= ">=",
+	[ExpressionType_LeftShift]		= "<<",
+	[ExpressionType_RightShift]		= ">>",
+	[ExpressionType_Addition]		= "+",
+	[ExpressionType_Subtraction]	= "-",
+	[ExpressionType_Multiplication]	= "*",
+	[ExpressionType_Division]		= "/",
+	[ExpressionType_Modulo]			= "%",
+
+	[ExpressionType_Negate]			= "-",
+	[ExpressionType_BitwiseNot]		= "~",
+	[ExpressionType_Not]			= "!",
+};
+
+static void set_bit(i32* mask, i32 bit_index)
+{
+	*mask |= (1 << bit_index);
+}
+
+static void clear_bit(i32* mask, i32 bit_index)
+{
+	*mask &= ~(1 << bit_index);
+}
+
+static b32 is_bit_set(i32 mask, i32 bit_index)
+{
+	return (mask & (1 << bit_index)) != 0;
+}
+
+static void print_expression(Program* program, ExpressionHandle expression_handle, i32 indent, i32* active_mask)
+{
+	Expression* expression = program_get_expression(program, expression_handle);
+	if (expression->type == ExpressionType_Error)
+	{
+		return;
+	}
+
+	for (i32 i = 0; i <= indent; ++i)
+	{
+		b32 last = (i == indent);
+		b32 is_active = is_bit_set(*active_mask, i);
+		printf((is_active || last) ? "|" : " ");
+		printf(last ? "-> " : "   ");
+	}
+
+	if (expression->type == ExpressionType_NumericLiteral)
+	{
+		printf("%s (%s, %d)\n", serialize_primitive_data(expression->literal), data_type_to_string(expression->result_data_type), (i32)expression_handle);
+	}
+	else if (expression->type == ExpressionType_Identifier)
+	{
+		IdentifierExpression e = expression->identifier;
+
+		printf("%.*s (%s, %d)\n", (i32)e.name.len, e.name.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
+	}
+	else if (expression_is_binary_operation(expression->type))
+	{
+		BinaryExpression e = expression->binary;
+
+		printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
+
+		set_bit(active_mask, indent + 1);
+		print_expression(program, e.lhs, indent + 1, active_mask);
+
+		clear_bit(active_mask, indent + 1);
+		print_expression(program, e.rhs, indent + 1, active_mask);
+	}
+	else if (expression_is_unary_operation(expression->type))
+	{
+		UnaryExpression e = expression->unary;
+
+		printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
+		print_expression(program, e.rhs, indent + 1, active_mask);
+	}
+	else if (expression->type == ExpressionType_Assignment)
+	{
+		AssignmentExpression e = expression->assignment;
+
+		Expression* lhs = program_get_expression(program, e.lhs);
+		assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+		String identifier = lhs->identifier.name;
+
+		printf("Variable assignment %.*s\n", (i32)identifier.len, identifier.str);
+		print_expression(program, e.rhs, indent + 1, active_mask);
+	}
+	else if (expression->type == ExpressionType_Declaration)
+	{
+		DeclarationExpression e = expression->declaration;
+
+		Expression* lhs = program_get_expression(program, e.lhs);
+		assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+		String identifier = lhs->identifier.name;
+
+		printf("Variable declaration %.*s\n", (i32)identifier.len, identifier.str);
+	}
+	else if (expression->type == ExpressionType_DeclarationAssignment)
+	{
+		DeclarationAssignmentExpression e = expression->declaration_assignment;
+
+		Expression* lhs = program_get_expression(program, e.lhs);
+		assert(lhs->type == ExpressionType_Identifier); // Temporary.
+
+		String identifier = lhs->identifier.name;
+
+		printf("Variable declaration & assignment %.*s\n", (i32)identifier.len, identifier.str);
+		print_expression(program, e.rhs, indent + 1, active_mask);
+	}
+	else if (expression->type == ExpressionType_Return)
+	{
+		printf("Return\n");
+		print_expression(program, expression->ret.rhs, indent + 1, active_mask);
+	}
+	else if (expression->type == ExpressionType_Block)
+	{
+		printf("Block\n");
+
+		set_bit(active_mask, indent + 1);
+		ExpressionHandle current = expression->block.first_expression;
+		while (current)
+		{
+			ExpressionHandle next = program_get_expression(program, current)->next;
+			if (!next) { clear_bit(active_mask, indent + 1); }
+
+			print_expression(program, current, indent + 1, active_mask);
+			current = next;
+		}
+	}
+	else if (expression->type == ExpressionType_Branch)
+	{
+		BranchExpression e = expression->branch;
+
+		printf("Branch\n");
+
+		set_bit(active_mask, indent + 1);
+		print_expression(program, e.condition, indent + 1, active_mask);
+
+		if (!e.else_expression) { clear_bit(active_mask, indent + 1); }
+		print_expression(program, e.then_expression, indent + 1, active_mask);
+
+		if (e.else_expression)
+		{
+			clear_bit(active_mask, indent + 1);
+			print_expression(program, e.else_expression, indent + 1, active_mask);
+		}
+	}
+	else if (expression->type == ExpressionType_Loop)
+	{
+		LoopExpression e = expression->loop;
+
+		printf("Loop\n");
+
+		set_bit(active_mask, indent + 1);
+		print_expression(program, e.condition, indent + 1, active_mask);
+
+		clear_bit(active_mask, indent + 1);
+		print_expression(program, e.then_expression, indent + 1, active_mask);
+	}
+	else
+	{
+		assert(!"Unknown expression type");
+	}
+}
+
+static void print_function(Program* program, Function function)
+{
+	printf("FUNCTION %.*s\n", (i32)function.name.len, function.name.str);
+
+	i32 active_mask = 0;
+	print_expression(program, function.first_expression, 0, &active_mask);
+	printf("\n");
+}
+
+void print_ast(Program* program)
+{
+	for (i64 i = 0; i < program->functions.count; ++i)
+	{
+		print_function(program, program->functions.items[i]);
+	}
+}
+
+

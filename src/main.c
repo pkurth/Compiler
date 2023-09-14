@@ -6,32 +6,32 @@
 
 static String read_file(const char* filename)
 {
-	String contents = { 0 };
+	String source_code = { 0 };
 
 	FILE* f = fopen(filename, "rb");
 	if (!f)
 	{
 		fprintf(stderr, "Could not open file '%s'.\n", filename);
-		return contents;
+		return source_code;
 	}
 	fseek(f, 0, SEEK_END);
 	u64 file_size = ftell(f);
 	fseek(f, 0, SEEK_SET);
 
-	contents.str = malloc(file_size + 1);
-	if (!contents.str)
+	source_code.str = malloc(file_size + 1);
+	if (!source_code.str)
 	{
 		fprintf(stderr, "Could not allocate space for file '%s'.\n", filename);
-		return contents;
+		return source_code;
 	}
 
-	contents.len = file_size;
+	source_code.len = file_size;
 
-	fread(contents.str, file_size, 1, f);
-	contents.str[file_size] = 0;
+	fread(source_code.str, file_size, 1, f);
+	source_code.str[file_size] = 0;
 	fclose(f);
 
-	return contents;
+	return source_code;
 }
 
 static void write_file(const char* filename, String s)
@@ -109,25 +109,24 @@ i32 main(i32 argc, char** argv)
 	snprintf(asm_path, sizeof(asm_path), "%.*s/%.*s.asm", (i32)obj_dir.len, obj_dir.str, (i32)obj_stem.len, obj_stem.str);
 
 
-	String contents = read_file(argv[1]);
+	Program program = { 0 };
+	program.source_code = read_file(argv[1]);
 
-	if (contents.len > 0)
+	if (program.source_code.len > 0)
 	{
-		TokenStream tokens = tokenize(contents);
+		TokenStream tokens = tokenize(program.source_code);
 		print_tokens(&tokens);
 
-		Program program = parse(tokens, contents);
-		if (!program.has_errors)
+		if (parse(&program, tokens))
 		{
-			analyze(&program, contents);
-			if (!program.has_errors)
+			if (analyze(&program))
 			{
-				print_program(&program);
+				print_ast(&program);
 
 				String result = generate(program);
 				write_file(asm_path, result);
 
-				free_string(&result);
+				string_free(&result);
 
 
 				char nasm_command[128] = "";
@@ -145,8 +144,6 @@ i32 main(i32 argc, char** argv)
 		free_program(&program);
 		free_token_stream(&tokens);
 	}
-
-	free_string(&contents);
 
 	exit(EXIT_SUCCESS);
 }

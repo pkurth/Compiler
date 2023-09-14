@@ -37,7 +37,7 @@ typedef struct String String;
 
 #define string_from_cstr(cstr) (String){ .str = cstr, .len = sizeof(cstr) - 1 }
 
-static void free_string(String* s)
+static void string_free(String* s)
 {
 	free(s->str);
 	s->str = 0;
@@ -528,13 +528,16 @@ typedef struct Function Function;
 
 struct Program
 {
+	String source_code;
+
 	DynamicArray(Function) functions;
 	DynamicArray(FunctionParameter) function_parameters;
 	DynamicArray(Expression) expressions;
-
-	b32 has_errors;
 };
 typedef struct Program Program;
+
+void free_program(Program* program);
+void print_ast(Program* program);
 
 static Expression* program_get_expression(Program* program, ExpressionHandle expression_handle)
 {

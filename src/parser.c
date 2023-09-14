@@ -13,9 +13,9 @@ static ExpressionHandle push_expression(Program* program, Expression expression)
 
 struct ParseContext
 {
+	Program* program;
 	TokenStream tokens;
 	i64 current_token;
-	String program_string;
 };
 typedef struct ParseContext ParseContext;
 
@@ -131,20 +131,20 @@ static b32 context_expect(ParseContext* context, TokenType expected)
 			fprintf(stderr, "LINE %d: Expected '%s', got '%s'.\n", unexpected_token.source_location.line, token_type_to_string(expected), token_type_to_string(unexpected_token.type));
 		}
 
-		print_line_error(context->program_string, unexpected_token.source_location);
+		print_line_error(context->program->source_code, unexpected_token.source_location);
 	}
 	return result;
 }
 
-static ExpressionHandle parse_expression(ParseContext* context, Program* program, i32 min_precedence);
+static ExpressionHandle parse_expression(ParseContext* context, i32 min_precedence);
 
-static ExpressionHandle parse_atom(ParseContext* context, Program* program)
+static ExpressionHandle parse_atom(ParseContext* context)
 {
 	Token token = context_consume(context);
 
 	if (token.type == TokenType_OpenParenthesis)
 	{
-		ExpressionHandle result = parse_expression(context, program, 1);
+		ExpressionHandle result = parse_expression(context, 1);
 		if (!context_expect(context, TokenType_CloseParenthesis))
 		{
 			return 0;
@@ -162,7 +162,7 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 			.literal = literal,
 			.result_data_type = literal.type
 		};
-		return push_expression(program, expression);
+		return push_expression(context->program, expression);
 	}
 	else if (token.type == TokenType_Identifier)
 	{
@@ -174,11 +174,11 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 			.identifier = identifier, 
 			.result_data_type = PrimitiveDatatype_I32 
 		}; // TODO: result_data_type.
-		return push_expression(program, expression);
+		return push_expression(context->program, expression);
 	}
 	else if (token_is_unary_operator(token.type) && context_expect_not_eof(context))
 	{
-		ExpressionHandle rhs = parse_atom(context, program);
+		ExpressionHandle rhs = parse_atom(context);
 
 		Expression expression = 
 		{ 
@@ -186,23 +186,23 @@ static ExpressionHandle parse_atom(ParseContext* context, Program* program)
 			.source_location = token.source_location,
 			.unary = {.rhs = rhs } 
 		};
-		return push_expression(program, expression);
+		return push_expression(context->program, expression);
 	}
 	else
 	{
 		fprintf(stderr, "LINE %d: Unexpected token '%s'.\n", token.source_location.line, token_type_to_string(token.type));
 
-		print_line_error(context->program_string, token.source_location);
+		print_line_error(context->program->source_code, token.source_location);
 	}
 
 	return 0;
 }
 
-static ExpressionHandle parse_expression(ParseContext* context, Program* program, i32 min_precedence)
+static ExpressionHandle parse_expression(ParseContext* context, i32 min_precedence)
 {
 	// https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing
 
-	ExpressionHandle lhs = parse_atom(context, program);
+	ExpressionHandle lhs = parse_atom(context);
 
 	for (;;)
 	{
@@ -224,7 +224,7 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 
 		context_advance(context);
 
-		ExpressionHandle rhs = parse_expression(context, program, next_min_precedence);
+		ExpressionHandle rhs = parse_expression(context, next_min_precedence);
 
 		if (token_is_binary_operator(next_token_type))
 		{
@@ -234,7 +234,7 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 				.source_location = next_token.source_location,
 				.binary = {.lhs = lhs, .rhs = rhs }
 			};
-			lhs = push_expression(program, operation);
+			lhs = push_expression(context->program, operation);
 		}
 		else if (token_is_assignment_operator(next_token_type))
 		{
@@ -246,7 +246,7 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 					.source_location = next_token.source_location,
 					.binary = {.lhs = lhs, .rhs = rhs } 
 				};
-				rhs = push_expression(program, operation);
+				rhs = push_expression(context->program, operation);
 			}
 
 			Expression assignment = 
@@ -255,14 +255,14 @@ static ExpressionHandle parse_expression(ParseContext* context, Program* program
 				.source_location = next_token.source_location,
 				.assignment = {.lhs = lhs, .rhs = rhs } 
 			};
-			lhs = push_expression(program, assignment);
+			lhs = push_expression(context->program, assignment);
 		}
 	}
 
 	return lhs;
 }
 
-static ExpressionHandle parse_top_level_expression(ParseContext* context, Program* program)
+static ExpressionHandle parse_top_level_expression(ParseContext* context)
 {
 	ExpressionHandle result = ExpressionType_Error;
 
@@ -282,7 +282,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 				.source_location = identifier_token.source_location,
 				.identifier = { .name = identifier } 
 			};
-			ExpressionHandle lhs = push_expression(program, lhs_expression);
+			ExpressionHandle lhs = push_expression(context->program, lhs_expression);
 
 			TokenType next = context_peek_type(context);
 			if (next == TokenType_Semicolon)
@@ -295,13 +295,13 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 					.source_location = token.source_location,
 					.declaration = {.data_type = token_to_datatype(token.type), .lhs = lhs }
 				};
-				result = push_expression(program, expression);
+				result = push_expression(context->program, expression);
 			}
 			else if (next == TokenType_Equal)
 			{
 				context_advance(context);
 
-				ExpressionHandle rhs = parse_expression(context, program, 0);
+				ExpressionHandle rhs = parse_expression(context, 0);
 				if (rhs)
 				{
 					Expression expression =
@@ -310,7 +310,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 						.source_location = token.source_location,
 						.declaration_assignment = { .data_type = token_to_datatype(token.type), .lhs = lhs, .rhs = rhs }
 					};
-					result = push_expression(program, expression);
+					result = push_expression(context->program, expression);
 				}
 
 				if (context_expect(context, TokenType_Semicolon))
@@ -321,7 +321,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 			else
 			{
 				Token unexpected_token = context_peek(context);
-				print_line_error(context->program_string, unexpected_token.source_location);
+				print_line_error(context->program->source_code, unexpected_token.source_location);
 			}
 		}
 	}
@@ -331,10 +331,10 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 
 		if (context_expect(context, TokenType_OpenParenthesis))
 		{
-			ExpressionHandle condition = parse_expression(context, program, 0);
+			ExpressionHandle condition = parse_expression(context, 0);
 			if (condition)
 			{
-				ExpressionHandle then_expression = parse_top_level_expression(context, program);
+				ExpressionHandle then_expression = parse_top_level_expression(context);
 				if (then_expression)
 				{
 					ExpressionHandle else_expression = 0;
@@ -343,7 +343,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 					if (next_token == TokenType_Else)
 					{
 						context_advance(context);
-						else_expression = parse_top_level_expression(context, program);
+						else_expression = parse_top_level_expression(context);
 					}
 
 					Expression branch_expression =
@@ -352,7 +352,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 						.source_location = token.source_location,
 						.branch = {.condition = condition, .then_expression = then_expression, .else_expression = else_expression }
 					};
-					result = push_expression(program, branch_expression);
+					result = push_expression(context->program, branch_expression);
 				}
 			}
 		}
@@ -363,10 +363,10 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 
 		if (context_expect(context, TokenType_OpenParenthesis))
 		{
-			ExpressionHandle condition = parse_expression(context, program, 0);
+			ExpressionHandle condition = parse_expression(context, 0);
 			if (condition)
 			{
-				ExpressionHandle then_expression = parse_top_level_expression(context, program);
+				ExpressionHandle then_expression = parse_top_level_expression(context);
 				if (then_expression)
 				{
 					Expression loop_expression =
@@ -375,7 +375,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 						.source_location = token.source_location,
 						.loop = {.condition = condition, .then_expression = then_expression }
 					};
-					result = push_expression(program, loop_expression);
+					result = push_expression(context->program, loop_expression);
 				}
 			}
 		}
@@ -386,7 +386,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 
 		if (context_expect_not_eof(context))
 		{
-			ExpressionHandle rhs = parse_expression(context, program, 0);
+			ExpressionHandle rhs = parse_expression(context, 0);
 			if (rhs)
 			{
 				if (context_expect(context, TokenType_Semicolon))
@@ -399,7 +399,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 						.source_location = token.source_location,
 						.ret = {.rhs = rhs }
 					};
-					result = push_expression(program, return_expression);
+					result = push_expression(context->program, return_expression);
 				}
 			}
 		}
@@ -417,10 +417,10 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 		ExpressionHandle last = 0;
 		while (context_expect_not_eof(context) && context_peek_type(context) != TokenType_CloseBrace)
 		{
-			ExpressionHandle expression = parse_top_level_expression(context, program);
+			ExpressionHandle expression = parse_top_level_expression(context);
 			if (last)
 			{
-				program_get_expression(program, last)->next = expression;
+				program_get_expression(context->program, last)->next = expression;
 			}
 			else
 			{
@@ -434,11 +434,11 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 			context_advance(context);
 		}
 
-		result = push_expression(program, block_expression);
+		result = push_expression(context->program, block_expression);
 	}
 	else
 	{
-		result = parse_expression(context, program, 0);
+		result = parse_expression(context, 0);
 		if (context_expect(context, TokenType_Semicolon))
 		{
 			context_advance(context);
@@ -462,13 +462,13 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context, Progra
 	return result;
 }
 
-static b32 parse_function_parameters(ParseContext* context, Function* function, Program* program)
+static b32 parse_function_parameters(ParseContext* context, Function* function)
 {
 	Token token = context_consume(context);
 
 	if (token.type == TokenType_OpenParenthesis)
 	{
-		i64 first_parameter = program->function_parameters.count;
+		i64 first_parameter = context->program->function_parameters.count;
 		while (context_peek_type(context) != TokenType_CloseParenthesis && context_peek_type(context) != TokenType_EOF)
 		{
 			if (!context_expect(context, TokenType_I32))
@@ -485,7 +485,7 @@ static b32 parse_function_parameters(ParseContext* context, Function* function, 
 			String identifier = context->tokens.identifiers.items[identifier_token.data_index];
 
 			FunctionParameter parameter = { .name = identifier.str };
-			array_push(&program->function_parameters, parameter);
+			array_push(&context->program->function_parameters, parameter);
 
 			if (context_peek_type(context) == TokenType_Comma)
 			{
@@ -500,7 +500,7 @@ static b32 parse_function_parameters(ParseContext* context, Function* function, 
 
 		context_advance(context);
 		function->first_parameter = first_parameter;
-		function->parameter_count = program->function_parameters.count - first_parameter;
+		function->parameter_count = context->program->function_parameters.count - first_parameter;
 
 		return true;
 	}
@@ -539,11 +539,11 @@ static b32 parse_function_return_types(ParseContext* context, Function* function
 	return false;
 }
 
-static b32 parse_function(ParseContext* context, Program* program)
+static b32 parse_function(ParseContext* context)
 {
 	Function function = { 0 };
 
-	if (!parse_function_parameters(context, &function, program))
+	if (!parse_function_parameters(context, &function))
 	{
 		return false;
 	}
@@ -575,228 +575,26 @@ static b32 parse_function(ParseContext* context, Program* program)
 		// Don't advance.
 	}
 
-	function.first_expression = parse_top_level_expression(context, program);
+	function.first_expression = parse_top_level_expression(context);
 
-	array_push(&program->functions, function);
+	array_push(&context->program->functions, function);
 
 	return true;
 }
 
-Program parse(TokenStream stream, String program_string)
+b32 parse(Program* program, TokenStream stream)
 {
-	Program program = { 0 };
-	ParseContext context = { stream, 0, program_string };
+	ParseContext context = { program, stream, 0 };
 
-	push_expression(&program, (Expression) { .type = ExpressionType_Error }); // Dummy.
+	push_expression(program, (Expression) { .type = ExpressionType_Error }); // Dummy.
+
+	b32 result = true;
 
 	while (context_peek_type(&context) != TokenType_EOF)
 	{
-		b32 success = parse_function(&context, &program);
-		program.has_errors |= !success;
+		b32 success = parse_function(&context);
+		result &= success;
 	}
 
-	return program;
-}
-
-void free_program(Program* program)
-{
-	array_free(&program->functions);
-	array_free(&program->function_parameters);
-	array_free(&program->expressions);
-}
-
-
-static const char* operator_strings[ExpressionType_Count] =
-{
-	[ExpressionType_Error] = "",
-	[ExpressionType_LogicalOr] = "||",
-	[ExpressionType_LogicalAnd] = "&&",
-	[ExpressionType_BitwiseOr] = "|",
-	[ExpressionType_BitwiseXor] = "^",
-	[ExpressionType_BitwiseAnd] = "&",
-	[ExpressionType_Equal] = "==",
-	[ExpressionType_NotEqual] = "!=",
-	[ExpressionType_Less] = "<",
-	[ExpressionType_Greater] = ">",
-	[ExpressionType_LessEqual] = "<=",
-	[ExpressionType_GreaterEqual] = ">=",
-	[ExpressionType_LeftShift] = "<<",
-	[ExpressionType_RightShift] = ">>",
-	[ExpressionType_Addition] = "+",
-	[ExpressionType_Subtraction] = "-",
-	[ExpressionType_Multiplication] = "*",
-	[ExpressionType_Division] = "/",
-	[ExpressionType_Modulo] = "%",
-
-	[ExpressionType_Negate] = "-",
-	[ExpressionType_BitwiseNot] = "~",
-	[ExpressionType_Not] = "!",
-};
-
-static void set_bit(i32* mask, i32 bit_index)
-{
-	*mask |= (1 << bit_index);
-}
-
-static void clear_bit(i32* mask, i32 bit_index)
-{
-	*mask &= ~(1 << bit_index);
-}
-
-static b32 is_bit_set(i32 mask, i32 bit_index)
-{
-	return (mask & (1 << bit_index)) != 0;
-}
-
-static void print_expression(Program* program, ExpressionHandle expression_handle, i32 indent, i32* active_mask)
-{
-	Expression* expression = program_get_expression(program, expression_handle);
-	if (expression->type == ExpressionType_Error)
-	{
-		return;
-	}
-
-	for (i32 i = 0; i <= indent; ++i)
-	{
-		b32 last = (i == indent);
-		b32 is_active = is_bit_set(*active_mask, i);
-		printf((is_active || last) ? "|" : " ");
-		printf(last ? "-> " : "   ");
-	}
-
-	if (expression->type == ExpressionType_NumericLiteral)
-	{
-		printf("%s (%s, %d)\n", serialize_primitive_data(expression->literal), data_type_to_string(expression->result_data_type), (i32)expression_handle);
-	}
-	else if (expression->type == ExpressionType_Identifier)
-	{
-		IdentifierExpression e = expression->identifier;
-
-		printf("%.*s (%s, %d)\n", (i32)e.name.len, e.name.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
-	}
-	else if (expression_is_binary_operation(expression->type))
-	{
-		BinaryExpression e = expression->binary;
-
-		printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
-
-		set_bit(active_mask, indent + 1);
-		print_expression(program, e.lhs, indent + 1, active_mask);
-
-		clear_bit(active_mask, indent + 1);
-		print_expression(program, e.rhs, indent + 1, active_mask);
-	}
-	else if (expression_is_unary_operation(expression->type))
-	{
-		UnaryExpression e = expression->unary;
-
-		printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
-		print_expression(program, e.rhs, indent + 1, active_mask);
-	}
-	else if (expression->type == ExpressionType_Assignment)
-	{
-		AssignmentExpression e = expression->assignment;
-
-		Expression* lhs = program_get_expression(program, e.lhs);
-		assert(lhs->type == ExpressionType_Identifier); // Temporary.
-
-		String identifier = lhs->identifier.name;
-
-		printf("Variable assignment %.*s\n", (i32)identifier.len, identifier.str);
-		print_expression(program, e.rhs, indent + 1, active_mask);
-	}
-	else if (expression->type == ExpressionType_Declaration)
-	{
-		DeclarationExpression e = expression->declaration;
-
-		Expression* lhs = program_get_expression(program, e.lhs);
-		assert(lhs->type == ExpressionType_Identifier); // Temporary.
-
-		String identifier = lhs->identifier.name;
-
-		printf("Variable declaration %.*s\n", (i32)identifier.len, identifier.str);
-	}
-	else if (expression->type == ExpressionType_DeclarationAssignment)
-	{
-		DeclarationAssignmentExpression e = expression->declaration_assignment;
-
-		Expression* lhs = program_get_expression(program, e.lhs);
-		assert(lhs->type == ExpressionType_Identifier); // Temporary.
-
-		String identifier = lhs->identifier.name;
-
-		printf("Variable declaration & assignment %.*s\n", (i32)identifier.len, identifier.str);
-		print_expression(program, e.rhs, indent + 1, active_mask);
-	}
-	else if (expression->type == ExpressionType_Return)
-	{
-		printf("Return\n");
-		print_expression(program, expression->ret.rhs, indent + 1, active_mask);
-	}
-	else if (expression->type == ExpressionType_Block)
-	{
-		printf("Block\n");
-
-		set_bit(active_mask, indent + 1);
-		ExpressionHandle current = expression->block.first_expression;
-		while (current)
-		{
-			ExpressionHandle next = program_get_expression(program, current)->next;
-			if (!next) { clear_bit(active_mask, indent + 1); }
-
-			print_expression(program, current, indent + 1, active_mask);
-			current = next;
-		}
-	}
-	else if (expression->type == ExpressionType_Branch)
-	{
-		BranchExpression e = expression->branch;
-
-		printf("Branch\n");
-
-		set_bit(active_mask, indent + 1);
-		print_expression(program, e.condition, indent + 1, active_mask);
-
-		if (!e.else_expression) { clear_bit(active_mask, indent + 1); }
-		print_expression(program, e.then_expression, indent + 1, active_mask);
-
-		if (e.else_expression)
-		{
-			clear_bit(active_mask, indent + 1);
-			print_expression(program, e.else_expression, indent + 1, active_mask);
-		}
-	}
-	else if (expression->type == ExpressionType_Loop)
-	{
-		LoopExpression e = expression->loop;
-
-		printf("Loop\n");
-
-		set_bit(active_mask, indent + 1);
-		print_expression(program, e.condition, indent + 1, active_mask);
-
-		clear_bit(active_mask, indent + 1);
-		print_expression(program, e.then_expression, indent + 1, active_mask);
-	}
-	else
-	{
-		assert(!"Unknown expression type");
-	}
-}
-
-static void print_function(Program* program, Function function)
-{
-	printf("FUNCTION %.*s\n", (i32)function.name.len, function.name.str);
-
-	i32 active_mask = 0;
-	print_expression(program, function.first_expression, 0, &active_mask);
-	printf("\n");
-}
-
-void print_program(Program* program)
-{
-	for (i64 i = 0; i < program->functions.count; ++i)
-	{
-		print_function(program, program->functions.items[i]);
-	}
+	return result;
 }

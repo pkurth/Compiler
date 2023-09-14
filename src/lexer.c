@@ -91,16 +91,16 @@ static const TokenKeywordMapping token_keyword_map[] =
 };
 #undef string
 
-TokenStream tokenize(String contents)
+TokenStream tokenize(String source_code)
 {
 	TokenStream stream = { 0 };
 
 	i32 line = 1;
 
-	for (i64 c_index = 0; c_index < contents.len; ++c_index)
+	for (i64 c_index = 0; c_index < source_code.len; ++c_index)
 	{
-		char c = contents.str[c_index];
-		char next_c = (c_index + 1 < contents.len) ? contents.str[c_index + 1] : 0;
+		char c = source_code.str[c_index];
+		char next_c = (c_index + 1 < source_code.len) ? source_code.str[c_index + 1] : 0;
 
 		if (isspace(c))
 		{
@@ -115,13 +115,13 @@ TokenStream tokenize(String contents)
 		{
 			if (next_c == '/')
 			{
-				for (; c_index < contents.len && contents.str[c_index] != '\n'; ++c_index) {}
+				for (; c_index < source_code.len && source_code.str[c_index] != '\n'; ++c_index) {}
 				++line;
 				continue;
 			}
 		}
 
-		String token_string = { .str = contents.str + c_index, .len = 1 };
+		String token_string = { .str = source_code.str + c_index, .len = 1 };
 		Token token = 
 		{ 
 			.type = character_to_token_type[c], 
@@ -139,7 +139,7 @@ Continuations:
 				token.type = continuation.continuations[continuation_index].type;
 				++token_string.len;
 
-				next_c = (c_index + token_string.len < contents.len) ? contents.str[c_index + token_string.len] : 0;
+				next_c = (c_index + token_string.len < source_code.len) ? source_code.str[c_index + token_string.len] : 0;
 				goto Continuations;
 			}
 		}
@@ -148,7 +148,7 @@ Continuations:
 
 		if (isalpha(c) || c == '_')
 		{
-			for (i64 i = c_index + 1; i < contents.len && (isalnum(contents.str[i]) || contents.str[i] == '_'); ++i)
+			for (i64 i = c_index + 1; i < source_code.len && (isalnum(source_code.str[i]) || source_code.str[i] == '_'); ++i)
 			{
 				++token_string.len;
 			}
@@ -193,9 +193,9 @@ Continuations:
 			PrimitiveData literal = { .type = PrimitiveDatatype_I32 };
 			b32 e_found = false;
 
-			for (i64 i = c_index + 1; i < contents.len; ++i)
+			for (i64 i = c_index + 1; i < source_code.len; ++i)
 			{
-				char c = contents.str[i];
+				char c = source_code.str[i];
 				if (!isdigit(c))
 				{
 					if (literal.type == PrimitiveDatatype_I32)
