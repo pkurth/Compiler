@@ -124,8 +124,15 @@ static void generate_expression(Program* program, ExpressionHandle expression_ha
 	else if (expression->type == ExpressionType_FunctionCall)
 	{
 		FunctionCallExpression e = expression->function_call;
+		Function* function = &program->functions.items[e.function_index];
+		assert(function->calling_convention == CallingConvention_Windows_x64);
 
 		const char* argument_registers[] = { "rcx", "rdx", "r8", "r9" };
+
+		// Arguments: rcx, rdx, r8, r9
+		// Stack	: [ Shadow space ] arg4 arg5 ...
+
+		i32 parameter_count = (i32)function->parameter_count;
 
 		ExpressionHandle argument = e.first_argument;
 		i32 argument_index = 0;
@@ -137,15 +144,23 @@ static void generate_expression(Program* program, ExpressionHandle expression_ha
 			{
 				stack_pop(argument_registers[argument_index], assembly);
 			}
-			// TODO: Remaining arguments must be pushed to the stack in reverse order.
+			else
+			{
+				// Remaining arguments are pushed to the stack in reverse order.
+				stack_pop("rax", assembly);
+				i32 offset = (parameter_count - 1 - argument_index) * 8 + 8;
+				string_push(assembly, "    mov [rsp-%d], rax\n", offset);
+			}
 
 			++argument_index;
 			argument = program_get_expression(program, argument)->next;
 		}
 
-		string_push(assembly, "    sub rsp, 32\n");
+		i32 parameter_stack_size = max(32, parameter_count * 8);
+
+		string_push(assembly, "    sub rsp, %d\n", parameter_stack_size);
 		string_push(assembly, "    call %.*s\n", (i32)e.function_name.len, e.function_name.str);
-		string_push(assembly, "    add rsp, 32\n");
+		string_push(assembly, "    add rsp, %d\n", parameter_stack_size);
 
 		stack_push("rax", assembly);
 	}
@@ -248,8 +263,9 @@ static void generate_function(Program* program, Function function, String* assem
 {
 	generate_function_header(function.name, function.stack_size, assembly);
 
+	assert(function.calling_convention == CallingConvention_Windows_x64);
 	const char* argument_registers[] = { "rcx", "rdx", "r8", "r9" };
-	for (i64 i = 0; i < function.parameter_count; ++i)
+	for (i64 i = 0; i < min(function.parameter_count, 4); ++i)
 	{
 		string_push(assembly, "    mov QWORD[rbp%+d], %s\n", 16 + i * 8, argument_registers[i]);
 	}
