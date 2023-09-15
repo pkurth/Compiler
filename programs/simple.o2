@@ -2,7 +2,7 @@
 
 (i32 x) -> (i32) square =
 {
-	return 2 * 2;
+	return x * x;
 }
 
 () -> (i32) main =
@@ -46,5 +46,7 @@
 	// comment
 	i32 c = 33 >= 10;
 
-	return v;
+	b = square(square(4) * 2);
+
+	return b;
 }

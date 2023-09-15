@@ -303,6 +303,23 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 		clear_bit(active_mask, indent + 1);
 		print_expression(program, e.then_expression, indent + 1, active_mask);
 	}
+	else if (expression->type == ExpressionType_FunctionCall)
+	{
+		FunctionCallExpression e = expression->function_call;
+
+		printf("Function call %.*s\n", (i32)e.function_name.len, e.function_name.str);
+
+		set_bit(active_mask, indent + 1);
+		ExpressionHandle current = e.first_argument;
+		while (current)
+		{
+			ExpressionHandle next = program_get_expression(program, current)->next;
+			if (!next) { clear_bit(active_mask, indent + 1); }
+
+			print_expression(program, current, indent + 1, active_mask);
+			current = next;
+		}
+	}
 	else
 	{
 		assert(!"Unknown expression type");

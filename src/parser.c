@@ -144,7 +144,7 @@ static ExpressionHandle parse_atom(ParseContext* context)
 
 	if (token.type == TokenType_OpenParenthesis)
 	{
-		ExpressionHandle result = parse_expression(context, 1);
+		ExpressionHandle result = parse_expression(context, 0);
 		if (!context_expect(context, TokenType_CloseParenthesis))
 		{
 			return 0;
@@ -167,14 +167,63 @@ static ExpressionHandle parse_atom(ParseContext* context)
 	else if (token.type == TokenType_Identifier)
 	{
 		String identifier = context->tokens.identifiers.items[token.data_index];
-		Expression expression = 
-		{ 
-			.type = ExpressionType_Identifier,
-			.source_location = token.source_location,
-			.identifier = identifier, 
-			.result_data_type = PrimitiveDatatype_I32 
-		}; // TODO: result_data_type.
-		return push_expression(context->program, expression);
+
+		if (context_peek_type(context) == TokenType_OpenParenthesis)
+		{
+			context_advance(context);
+
+			Expression function_call_expression =
+			{
+				.type = ExpressionType_FunctionCall,
+				.source_location = token.source_location,
+				.function_call = {.function_name = identifier, .first_argument = 0 },
+				.result_data_type = PrimitiveDatatype_I32
+			}; // TODO: result_data_type.
+
+
+			ExpressionHandle last = 0;
+			while (context_expect_not_eof(context) && context_peek_type(context) != TokenType_CloseParenthesis)
+			{
+				if (function_call_expression.function_call.first_argument)
+				{
+					if (!context_expect(context, TokenType_Comma))
+					{
+						return 0;
+					}
+					context_advance(context);
+				}
+
+				ExpressionHandle expression = parse_expression(context, 0);
+				if (last)
+				{
+					program_get_expression(context->program, last)->next = expression;
+				}
+				else
+				{
+					function_call_expression.function_call.first_argument = expression;
+				}
+				last = expression;
+			}
+
+			if (!context_expect(context, TokenType_CloseParenthesis))
+			{
+				return 0;
+			}
+			context_advance(context);
+			
+			return push_expression(context->program, function_call_expression);
+		}
+		else
+		{
+			Expression expression =
+			{
+				.type = ExpressionType_Identifier,
+				.source_location = token.source_location,
+				.identifier = identifier,
+				.result_data_type = PrimitiveDatatype_I32
+			}; // TODO: result_data_type.
+			return push_expression(context->program, expression);
+		}
 	}
 	else if (token_is_unary_operator(token.type) && context_expect_not_eof(context))
 	{
@@ -484,7 +533,7 @@ static b32 parse_function_parameters(ParseContext* context, Function* function)
 			Token identifier_token = context_consume(context);
 			String identifier = context->tokens.identifiers.items[identifier_token.data_index];
 
-			FunctionParameter parameter = { .name = identifier.str };
+			FunctionParameter parameter = { .name = identifier };
 			array_push(&context->program->function_parameters, parameter);
 
 			if (context_peek_type(context) == TokenType_Comma)
@@ -542,6 +591,8 @@ static b32 parse_function_return_types(ParseContext* context, Function* function
 static b32 parse_function(ParseContext* context)
 {
 	Function function = { 0 };
+	function.calling_convention = CallingConvention_Windows_x64;
+	function.source_location = context_peek(context).source_location;
 
 	if (!parse_function_parameters(context, &function))
 	{

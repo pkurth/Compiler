@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <inttypes.h>
 
 
@@ -21,9 +22,6 @@ typedef float f32;
 typedef double f64;
 
 typedef u32 b32;
-
-#define true 1
-#define false 0
 
 #define arraysize(arr) (i64)(sizeof(arr) / sizeof((arr)[0]))
 
@@ -384,6 +382,8 @@ enum ExpressionType
 	ExpressionType_Branch,
 	ExpressionType_Loop,
 
+	ExpressionType_FunctionCall,
+
 	ExpressionType_Count,
 };
 typedef enum ExpressionType ExpressionType;
@@ -472,6 +472,14 @@ struct LoopExpression
 };
 typedef struct LoopExpression LoopExpression;
 
+struct FunctionCallExpression
+{
+	String function_name;
+	ExpressionHandle first_argument;
+	i32 function_index;
+};
+typedef struct FunctionCallExpression FunctionCallExpression;
+
 struct Expression
 {
 	ExpressionType type;
@@ -493,9 +501,19 @@ struct Expression
 		BlockExpression block;
 		BranchExpression branch;
 		LoopExpression loop;
+		FunctionCallExpression function_call;
 	};
 };
 typedef struct Expression Expression;
+
+
+enum CallingConvention
+{
+	CallingConvention_Windows_x64,
+	CallingConvention_stdcall,
+	CallingConvention_cdecl,
+};
+typedef enum CallingConvention CallingConvention;
 
 struct FunctionParameter
 {
@@ -515,7 +533,9 @@ typedef struct LocalVariable LocalVariable;
 struct Function
 {
 	String name;
+	SourceLocation source_location;
 
+	CallingConvention calling_convention;
 	ExpressionHandle first_expression;
 
 	i64 first_parameter;

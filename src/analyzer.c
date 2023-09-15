@@ -115,7 +115,7 @@ static LocalVariable* find_local_variable(LocalVariableContext* local_variables,
 	return 0;
 }
 
-static b32 add_local_variable(Program* program, String identifier, PrimitiveDatatype data_type, SourceLocation source_location,
+static b32 assert_no_variable_name_collision(Program* program, String identifier, SourceLocation source_location,
 	StackInfo* stack_info, i64 first_local_variable_in_current_block)
 {
 	LocalVariable* var = find_local_variable(stack_info->current_local_variables, identifier, first_local_variable_in_current_block);
@@ -127,14 +127,45 @@ static b32 add_local_variable(Program* program, String identifier, PrimitiveData
 		return false;
 	}
 
-	// Add to local variables.
+	return true;
+}
+
+static b32 add_local_variable(Program* program, String identifier, PrimitiveDatatype data_type, SourceLocation source_location,
+	StackInfo* stack_info, i64 first_local_variable_in_current_block)
+{
+	if (!assert_no_variable_name_collision(program, identifier, source_location, stack_info, first_local_variable_in_current_block))
+	{
+		return false;
+	}
+
 	stack_info->current_offset_from_frame_pointer += 8; // Increment first!
 	stack_info->stack_size = max(stack_info->stack_size, stack_info->current_offset_from_frame_pointer);
 
 	LocalVariable variable =
 	{
 		.name = identifier,
-		.offset_from_frame_pointer = stack_info->current_offset_from_frame_pointer,
+		.offset_from_frame_pointer = -stack_info->current_offset_from_frame_pointer,
+		.data_type = data_type,
+		.source_location = source_location,
+	};
+
+	array_push(stack_info->current_local_variables, variable);
+
+	return true;
+}
+
+static b32 add_parameter_variable(Program* program, String identifier, PrimitiveDatatype data_type, SourceLocation source_location,
+	i32 parameter_index, StackInfo* stack_info, i64 first_local_variable_in_current_block)
+{
+	if (!assert_no_variable_name_collision(program, identifier, source_location, stack_info, first_local_variable_in_current_block))
+	{
+		return false;
+	}
+
+	LocalVariable variable =
+	{
+		.name = identifier,
+		.offset_from_frame_pointer = parameter_index * 8 + 16, // Skip over return address and pushed rbp.
 		.data_type = data_type,
 		.source_location = source_location,
 	};
@@ -228,6 +259,57 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 		expression->result_data_type = var->data_type;
 		e->offset_from_frame_pointer = var->offset_from_frame_pointer;
 	}
+	else if (expression->type == ExpressionType_FunctionCall)
+	{
+		FunctionCallExpression* e = &expression->function_call;
+
+		i32 argument_count = 0;
+
+		ExpressionHandle argument = e->first_argument;
+		while (argument)
+		{
+			if (!analyze_expression(program, argument, stack_info))
+			{
+				return false;
+			}
+			++argument_count;
+			argument = program_get_expression(program, argument)->next;
+		}
+
+		Function* called_function = 0;
+		b32 error_printed = false;
+		for (i64 function_index = 0; function_index < program->functions.count; ++function_index)
+		{
+			Function* function = &program->functions.items[function_index];
+			if (string_equal(function->name, e->function_name) && function->parameter_count == argument_count)
+			{
+				if (called_function)
+				{
+					if (!error_printed)
+					{
+						fprintf(stderr, "LINE %d: More than one function matches call:\n", expression->source_location.line);
+						print_line_error(program->source_code, expression->source_location);
+						fprintf(stderr, "Could be either:\n");
+						print_line_error(program->source_code, called_function->source_location);
+						error_printed = true;
+					}
+					print_line_error(program->source_code, function->source_location);
+				}
+				called_function = function;
+			}
+		}
+		if (!called_function)
+		{
+			fprintf(stderr, "LINE %d: No matching function found for call:\n", expression->source_location.line);
+			print_line_error(program->source_code, expression->source_location);
+			return false;
+		}
+		if (error_printed)
+		{
+			return false;
+		}
+		e->function_index = (i32)(called_function - program->functions.items);
+	}
 	else
 	{
 		assert(false);
@@ -320,14 +402,30 @@ static b32 analyze_top_level_expression(Program* program, ExpressionHandle expre
 
 static b32 analyze_function(Program* program, Function* function, LocalVariableContext* local_variable_context)
 {
+	i64 variable_count = local_variable_context->count;
+
 	StackInfo stack_info = { .current_local_variables = local_variable_context };
 
-	if (analyze_top_level_expression(program, function->first_expression, &stack_info))
+	b32 result = true;
+
+	for (i64 i = 0; i < function->parameter_count; ++i)
 	{
-		function->stack_size = stack_info.stack_size;
-		return true;
+		FunctionParameter parameter = program->function_parameters.items[i + function->first_parameter];
+		if (!add_parameter_variable(program, parameter.name, PrimitiveDatatype_I32, function->source_location, (i32)i, &stack_info, variable_count))
+		{
+			result = false;
+		}
 	}
-	return false;
+
+	if (!analyze_top_level_expression(program, function->first_expression, &stack_info))
+	{
+		result = false;
+	}
+
+	function->stack_size = stack_info.stack_size;
+	local_variable_context->count = variable_count;
+
+	return result;
 }
 
 b32 analyze(Program* program)

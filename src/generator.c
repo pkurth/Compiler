@@ -46,7 +46,7 @@ static void generate_expression(Program* program, ExpressionHandle expression_ha
 	if (expression->type == ExpressionType_Identifier)
 	{
 		char from[32];
-		snprintf(from, sizeof(from), "QWORD [rbp-%d]", expression->identifier.offset_from_frame_pointer);
+		snprintf(from, sizeof(from), "QWORD [rbp%+d]", expression->identifier.offset_from_frame_pointer);
 
 		stack_push(from, assembly);
 	}
@@ -118,7 +118,35 @@ static void generate_expression(Program* program, ExpressionHandle expression_ha
 		generate_expression(program, e.rhs, assembly);
 
 		stack_pop("rax", assembly);
-		string_push(assembly, "    mov [rbp-%d], rax\n", lhs->identifier.offset_from_frame_pointer);
+		string_push(assembly, "    mov [rbp%+d], rax\n", lhs->identifier.offset_from_frame_pointer);
+		stack_push("rax", assembly);
+	}
+	else if (expression->type == ExpressionType_FunctionCall)
+	{
+		FunctionCallExpression e = expression->function_call;
+
+		const char* argument_registers[] = { "rcx", "rdx", "r8", "r9" };
+
+		ExpressionHandle argument = e.first_argument;
+		i32 argument_index = 0;
+		while (argument)
+		{
+			generate_expression(program, argument, assembly);
+
+			if (argument_index < arraysize(argument_registers))
+			{
+				stack_pop(argument_registers[argument_index], assembly);
+			}
+			// TODO: Remaining arguments must be pushed to the stack in reverse order.
+
+			++argument_index;
+			argument = program_get_expression(program, argument)->next;
+		}
+
+		string_push(assembly, "    sub rsp, 32\n");
+		string_push(assembly, "    call %.*s\n", (i32)e.function_name.len, e.function_name.str);
+		string_push(assembly, "    add rsp, 32\n");
+
 		stack_push("rax", assembly);
 	}
 	else
@@ -153,7 +181,7 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 			generate_expression(program, e.rhs, assembly);
 
 			stack_pop("rax", assembly);
-			string_push(assembly, "    mov [rbp-%d], rax\n", lhs->identifier.offset_from_frame_pointer);
+			string_push(assembly, "    mov [rbp%+d], rax\n", lhs->identifier.offset_from_frame_pointer);
 		}
 		else if (expression->type == ExpressionType_Return)
 		{
@@ -219,6 +247,13 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 static void generate_function(Program* program, Function function, String* assembly)
 {
 	generate_function_header(function.name, function.stack_size, assembly);
+
+	const char* argument_registers[] = { "rcx", "rdx", "r8", "r9" };
+	for (i64 i = 0; i < function.parameter_count; ++i)
+	{
+		string_push(assembly, "    mov QWORD[rbp%+d], %s\n", 16 + i * 8, argument_registers[i]);
+	}
+
 	generate_top_level_expression(program, function.first_expression, assembly);
 	string_push(assembly, "\n");
 }
