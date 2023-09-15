@@ -115,7 +115,7 @@ i32 main(i32 argc, char** argv)
 	if (program.source_code.len > 0)
 	{
 		TokenStream tokens = tokenize(program.source_code);
-		print_tokens(&tokens);
+		//print_tokens(&tokens);
 
 		if (parse(&program, tokens))
 		{

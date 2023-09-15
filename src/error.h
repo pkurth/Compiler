@@ -26,11 +26,17 @@ static String get_line(String source_code, i32 character_index)
 	return result;
 }
 
+static void print_line(String source_code, SourceLocation source_location)
+{
+	String line = get_line(source_code, source_location.global_character_index);
+	fprintf(stderr, "%.*s\n", (i32)line.len, line.str);
+}
+
 static void print_line_error(String source_code, SourceLocation source_location)
 {
 	String line = get_line(source_code, source_location.global_character_index);
 	fprintf(stderr, "%.*s\n", (i32)line.len, line.str);
-
+	
 	i32 column = (i32)((source_code.str + source_location.global_character_index) - line.str);
 	fprintf(stderr, "%*s^\n", column, "");
 }

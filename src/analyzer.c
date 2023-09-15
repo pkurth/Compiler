@@ -290,10 +290,12 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 						fprintf(stderr, "LINE %d: More than one function matches call:\n", expression->source_location.line);
 						print_line_error(program->source_code, expression->source_location);
 						fprintf(stderr, "Could be either:\n");
-						print_line_error(program->source_code, called_function->source_location);
+						fprintf(stderr, "LINE %d: ", called_function->source_location.line);
+						print_line(program->source_code, called_function->source_location);
 						error_printed = true;
 					}
-					print_line_error(program->source_code, function->source_location);
+					fprintf(stderr, "LINE %d: ", function->source_location.line);
+					print_line(program->source_code, function->source_location);
 				}
 				called_function = function;
 			}
