@@ -374,23 +374,32 @@ enum ExpressionType
 	ExpressionType_BitwiseNot,
 	ExpressionType_Not,
 
+	// Others.
 	ExpressionType_NumericLiteral,
 	ExpressionType_Identifier,
-
 	ExpressionType_Assignment,
-	ExpressionType_Declaration,
-	ExpressionType_DeclarationAssignment,
-	ExpressionType_Return,
-	ExpressionType_Block,
-
-	ExpressionType_Branch,
-	ExpressionType_Loop,
-
 	ExpressionType_FunctionCall,
 
 	ExpressionType_Count,
 };
 typedef enum ExpressionType ExpressionType;
+
+enum StatementType
+{
+	StatementType_Error,
+
+	StatementType_Simple,
+	StatementType_Declaration,
+	StatementType_DeclarationAssignment,
+	StatementType_Return,
+	StatementType_Block,
+
+	StatementType_Branch,
+	StatementType_Loop,
+
+	StatementType_Count,
+};
+typedef enum StatementType StatementType;
 
 static b32 expression_is_binary_operation(ExpressionType type)
 {
@@ -434,48 +443,6 @@ struct AssignmentExpression
 };
 typedef struct AssignmentExpression AssignmentExpression;
 
-struct DeclarationExpression
-{
-	ExpressionHandle lhs;
-	PrimitiveDatatype data_type;
-};
-typedef struct DeclarationExpression DeclarationExpression;
-
-struct DeclarationAssignmentExpression
-{
-	ExpressionHandle lhs;
-	PrimitiveDatatype data_type;
-	ExpressionHandle rhs;
-};
-typedef struct DeclarationAssignmentExpression DeclarationAssignmentExpression;
-
-struct ReturnExpression
-{
-	ExpressionHandle rhs;
-};
-typedef struct ReturnExpression ReturnExpression;
-
-struct BlockExpression
-{
-	ExpressionHandle first_expression;
-};
-typedef struct BlockExpression BlockExpression;
-
-struct BranchExpression
-{
-	ExpressionHandle condition;
-	ExpressionHandle then_expression;
-	ExpressionHandle else_expression;
-};
-typedef struct BranchExpression BranchExpression;
-
-struct LoopExpression
-{
-	ExpressionHandle condition;
-	ExpressionHandle then_expression;
-};
-typedef struct LoopExpression LoopExpression;
-
 struct FunctionCallExpression
 {
 	String function_name;
@@ -489,7 +456,6 @@ struct Expression
 	ExpressionType type;
 	SourceLocation source_location;
 	PrimitiveDatatype result_data_type;
-
 	ExpressionHandle next;
 
 	union
@@ -499,16 +465,78 @@ struct Expression
 		BinaryExpression binary;
 		UnaryExpression unary;
 		AssignmentExpression assignment;
-		DeclarationExpression declaration;
-		DeclarationAssignmentExpression declaration_assignment;
-		ReturnExpression ret;
-		BlockExpression block;
-		BranchExpression branch;
-		LoopExpression loop;
 		FunctionCallExpression function_call;
 	};
 };
 typedef struct Expression Expression;
+
+
+struct SimpleStatement
+{
+	ExpressionHandle expression;
+};
+typedef struct SimpleStatement SimpleStatement;
+
+struct DeclarationStatement
+{
+	ExpressionHandle lhs;
+	PrimitiveDatatype data_type;
+};
+typedef struct DeclarationStatement DeclarationStatement;
+
+struct DeclarationAssignmentStatement
+{
+	ExpressionHandle lhs;
+	PrimitiveDatatype data_type;
+	ExpressionHandle rhs;
+};
+typedef struct DeclarationAssignmentStatement DeclarationAssignmentStatement;
+
+struct ReturnStatement
+{
+	ExpressionHandle rhs;
+};
+typedef struct ReturnStatement ReturnStatement;
+
+struct BlockStatement
+{
+	i32 statement_count;
+};
+typedef struct BlockStatement BlockStatement;
+
+struct BranchStatement
+{
+	ExpressionHandle condition;
+	i32 then_statement_count;
+	i32 else_statement_count;
+};
+typedef struct BranchStatement BranchStatement;
+
+struct LoopStatement
+{
+	ExpressionHandle condition;
+	i32 then_statement_count;
+};
+typedef struct LoopStatement LoopStatement;
+
+struct Statement
+{
+	StatementType type;
+	SourceLocation source_location;
+
+	union
+	{
+		SimpleStatement simple;
+		DeclarationStatement declaration;
+		DeclarationAssignmentStatement declaration_assignment;
+		ReturnStatement ret;
+		BlockStatement block;
+		BranchStatement branch;
+		LoopStatement loop;
+	};
+};
+typedef struct Statement Statement;
+
 
 
 enum CallingConvention
@@ -540,7 +568,11 @@ struct Function
 	SourceLocation source_location;
 
 	CallingConvention calling_convention;
-	ExpressionHandle first_expression;
+
+	i32 body_first_statement;
+	i32 body_statement_count;
+
+
 
 	i64 first_parameter;
 	i64 parameter_count;
@@ -556,6 +588,7 @@ struct Program
 
 	DynamicArray(Function) functions;
 	DynamicArray(FunctionParameter) function_parameters;
+	DynamicArray(Statement) statements;
 	DynamicArray(Expression) expressions;
 };
 typedef struct Program Program;
@@ -566,5 +599,10 @@ void print_ast(Program* program);
 static Expression* program_get_expression(Program* program, ExpressionHandle expression_handle)
 {
 	return &program->expressions.items[expression_handle];
+}
+
+static Statement* program_get_statement(Program* program, i32 statement_index)
+{
+	return &program->statements.items[statement_index];
 }
 

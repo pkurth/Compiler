@@ -176,19 +176,25 @@ static i32 generate_label()
 	return label++;
 }
 
-static void generate_top_level_expression(Program* program, ExpressionHandle expression_handle, String* assembly)
+static void generate_statements(Program* program, i32 first_statement, i32 statement_count, String* assembly)
 {
-	while (expression_handle)
+	for (i32 i = 0; i < statement_count; ++i)
 	{
-		Expression* expression = program_get_expression(program, expression_handle);
+		i32 statement_index = first_statement + i;
 
-		if (expression->type == ExpressionType_Declaration)
+		Statement* statement = program_get_statement(program, statement_index);
+
+		if (statement->type == StatementType_Simple)
+		{
+			generate_expression(program, statement->simple.expression, assembly);
+		}
+		else if (statement->type == StatementType_Declaration)
 		{
 
 		}
-		else if (expression->type == ExpressionType_DeclarationAssignment)
+		else if (statement->type == StatementType_DeclarationAssignment)
 		{
-			DeclarationAssignmentExpression e = expression->declaration_assignment;
+			DeclarationAssignmentStatement e = statement->declaration_assignment;
 
 			Expression* lhs = program_get_expression(program, e.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
@@ -198,20 +204,21 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 			stack_pop("rax", assembly);
 			string_push(assembly, "    mov [rbp%+d], rax\n", lhs->identifier.offset_from_frame_pointer);
 		}
-		else if (expression->type == ExpressionType_Return)
+		else if (statement->type == StatementType_Return)
 		{
-			generate_expression(program, expression->ret.rhs, assembly);
+			generate_expression(program, statement->ret.rhs, assembly);
 
 			stack_pop("rax", assembly);
 			generate_return(assembly);
 		}
-		else if (expression->type == ExpressionType_Block)
+		else if (statement->type == StatementType_Block)
 		{
-			generate_top_level_expression(program, expression->block.first_expression, assembly);
+			generate_statements(program, statement_index + 1, statement->block.statement_count, assembly);
+			i += statement->block.statement_count;
 		}
-		else if (expression->type == ExpressionType_Branch)
+		else if (statement->type == StatementType_Branch)
 		{
-			BranchExpression e = expression->branch;
+			BranchStatement e = statement->branch;
 
 			i32 else_label = generate_label();
 			i32 end_label = generate_label();
@@ -220,30 +227,32 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 			stack_pop("rax", assembly);
 			string_push(assembly, "    cmp rax, 0\n    je .L%d\n", else_label);
 
-			generate_top_level_expression(program, e.then_expression, assembly);
-			if (e.else_expression)
+			generate_statements(program, statement_index + 1, e.then_statement_count, assembly);
+			if (e.else_statement_count)
 			{
 				string_push(assembly, "    jmp .L%d\n", end_label);
 			}
 
 			string_push(assembly, "    .L%d:\n", else_label);
 
-			if (e.else_expression)
+			if (e.else_statement_count)
 			{
-				generate_top_level_expression(program, e.else_expression, assembly);
+				generate_statements(program, statement_index + e.then_statement_count + 1, e.else_statement_count, assembly);
 				string_push(assembly, "    .L%d:\n", end_label);
 			}
+
+			i += e.then_statement_count + e.else_statement_count;
 		}
-		else if (expression->type == ExpressionType_Loop)
+		else if (statement->type == StatementType_Loop)
 		{
-			LoopExpression e = expression->loop;
+			LoopStatement e = statement->loop;
 
 			i32 start_label = generate_label();
 			i32 condition_label = generate_label();
 
 			string_push(assembly, "    jmp .L%d\n", condition_label);
 			string_push(assembly, "    .L%d:\n", start_label);
-			generate_top_level_expression(program, e.then_expression, assembly);
+			generate_statements(program, statement_index + 1, e.then_statement_count, assembly);
 
 			string_push(assembly, "    .L%d:\n", condition_label);
 			generate_expression(program, e.condition, assembly);
@@ -252,10 +261,8 @@ static void generate_top_level_expression(Program* program, ExpressionHandle exp
 		}
 		else
 		{
-			generate_expression(program, expression_handle, assembly);
+			assert(false);
 		}
-
-		expression_handle = expression->next;
 	}
 }
 
@@ -270,7 +277,7 @@ static void generate_function(Program* program, Function function, String* assem
 		string_push(assembly, "    mov QWORD[rbp%+d], %s\n", 16 + i * 8, argument_registers[i]);
 	}
 
-	generate_top_level_expression(program, function.first_expression, assembly);
+	generate_statements(program, function.body_first_statement, function.body_statement_count, assembly);
 	string_push(assembly, "\n");
 }
 

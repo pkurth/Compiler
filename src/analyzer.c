@@ -320,34 +320,40 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 	return true;
 }
 
-static b32 analyze_top_level_expression(Program* program, ExpressionHandle expression_handle, StackInfo* stack_info)
+static b32 analyze_statements(Program* program, i32 first_statement, i32 statement_count, StackInfo* stack_info)
 {
 	i64 first_local_variable_in_current_block = stack_info->current_local_variables->count;
 
 	i32 current_offset_from_frame_pointer = stack_info->current_offset_from_frame_pointer;
 	i64 current_local_variable_count = stack_info->current_local_variables->count;
 
-	while (expression_handle)
+	for (i32 i = 0; i < statement_count; ++i)
 	{
-		Expression* expression = program_get_expression(program, expression_handle);
+		i32 statement_index = first_statement + i;
 
-		if (expression->type == ExpressionType_Declaration)
+		Statement* statement = program_get_statement(program, statement_index);
+
+		if (statement->type == StatementType_Simple)
 		{
-			DeclarationExpression e = expression->declaration;
+			if (!analyze_expression(program, statement->simple.expression, stack_info)) { return false; }
+		}
+		else if (statement->type == StatementType_Declaration)
+		{
+			DeclarationStatement e = statement->declaration;
 
 			Expression* lhs = program_get_expression(program, e.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
 			String identifier = lhs->identifier.name;
 
-			if (!add_local_variable(program, identifier, e.data_type, expression->source_location, stack_info, first_local_variable_in_current_block)) { break; }
-			if (!analyze_expression(program, e.lhs, stack_info)) { break; }
+			if (!add_local_variable(program, identifier, e.data_type, statement->source_location, stack_info, first_local_variable_in_current_block)) { return false; }
+			if (!analyze_expression(program, e.lhs, stack_info)) { return false; }
 		}
-		else if (expression->type == ExpressionType_DeclarationAssignment)
+		else if (statement->type == StatementType_DeclarationAssignment)
 		{
-			DeclarationAssignmentExpression e = expression->declaration_assignment;
+			DeclarationAssignmentStatement e = statement->declaration_assignment;
 
-			if (!analyze_expression(program, e.rhs, stack_info)) { break; }
+			if (!analyze_expression(program, e.rhs, stack_info)) { return false; }
 
 			Expression* rhs = program_get_expression(program, e.rhs);
 			Expression* lhs = program_get_expression(program, e.lhs);
@@ -356,53 +362,47 @@ static b32 analyze_top_level_expression(Program* program, ExpressionHandle expre
 			PrimitiveDatatype data_type = (e.data_type == PrimitiveDatatype_Unknown) ? rhs->result_data_type : e.data_type;
 
 			String identifier = lhs->identifier.name;
-			if (!add_local_variable(program, identifier, data_type, expression->source_location, stack_info, first_local_variable_in_current_block)) { break; }
-			if (!analyze_expression(program, e.lhs, stack_info)) { break; }
+			if (!add_local_variable(program, identifier, data_type, statement->source_location, stack_info, first_local_variable_in_current_block)) { return false; }
+			if (!analyze_expression(program, e.lhs, stack_info)) { return false; }
 		}
-		else if (expression->type == ExpressionType_Return)
+		else if (statement->type == StatementType_Return)
 		{
-			if (!analyze_expression(program, expression->ret.rhs, stack_info)) { break; }
+			if (!analyze_expression(program, statement->ret.rhs, stack_info)) { return false; }
 		}
-		else if (expression->type == ExpressionType_Block)
+		else if (statement->type == StatementType_Block)
 		{
-			if (!analyze_top_level_expression(program, expression->block.first_expression, stack_info)) { break; }
+			if (!analyze_statements(program, statement_index + 1, statement->block.statement_count, stack_info)) { return false; }
+			i += statement->block.statement_count;
 		}
-		else if (expression->type == ExpressionType_Branch)
+		else if (statement->type == StatementType_Branch)
 		{
-			BranchExpression e = expression->branch;
+			BranchStatement e = statement->branch;
 
-			if (!analyze_expression(program, e.condition, stack_info)) { break; }
-			if (e.then_expression)
-			{
-				if (!analyze_top_level_expression(program, e.then_expression, stack_info)) { break; }
-			}
-			if (e.else_expression)
-			{
-				if (!analyze_top_level_expression(program, e.else_expression, stack_info)) { break; }
-			}
-		}
-		else if (expression->type == ExpressionType_Loop)
-		{
-			LoopExpression e = expression->loop;
+			if (!analyze_expression(program, e.condition, stack_info)) { return false; }
 
-			if (!analyze_expression(program, e.condition, stack_info)) { break; }
-			if (e.then_expression)
-			{
-				if (!analyze_top_level_expression(program, e.then_expression, stack_info)) { break; }
-			}
+			if (!analyze_statements(program, statement_index + 1, e.then_statement_count, stack_info)) { return false; }
+			if (!analyze_statements(program, statement_index + e.then_statement_count + 1, e.else_statement_count, stack_info)) { return false; }
+			i += e.then_statement_count + e.else_statement_count;
+		}
+		else if (statement->type == StatementType_Loop)
+		{
+			LoopStatement e = statement->loop;
+
+			if (!analyze_expression(program, e.condition, stack_info)) { return false; }
+
+			if (!analyze_statements(program, statement_index + 1, e.then_statement_count, stack_info)) { return false; }
+			i += e.then_statement_count;
 		}
 		else
 		{
-			if (!analyze_expression(program, expression_handle, stack_info)) { break; }
+			assert(false);
 		}
-
-		expression_handle = expression->next;
 	}
 
 	stack_info->current_local_variables->count = current_local_variable_count;
 	stack_info->current_offset_from_frame_pointer = current_offset_from_frame_pointer;
 
-	return expression_handle == 0;
+	return true;
 }
 
 static b32 analyze_function(Program* program, Function* function, LocalVariableContext* local_variable_context)
@@ -422,7 +422,7 @@ static b32 analyze_function(Program* program, Function* function, LocalVariableC
 		}
 	}
 
-	if (!analyze_top_level_expression(program, function->first_expression, &stack_info))
+	if (!analyze_statements(program, function->body_first_statement, function->body_statement_count, &stack_info))
 	{
 		result = false;
 	}

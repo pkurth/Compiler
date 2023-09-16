@@ -11,6 +11,13 @@ static ExpressionHandle push_expression(Program* program, Expression expression)
 	return result;
 }
 
+static i32 push_statement(Program* program, Statement statement)
+{
+	i32 result = (i32)program->statements.count;
+	array_push(&program->statements, statement);
+	return result;
+}
+
 struct ParseContext
 {
 	Program* program;
@@ -316,10 +323,8 @@ static ExpressionHandle parse_expression(ParseContext* context, i32 min_preceden
 	return lhs;
 }
 
-static ExpressionHandle parse_top_level_expression(ParseContext* context)
+static i32 parse_statement(ParseContext* context)
 {
-	ExpressionHandle result = ExpressionType_Error;
-
 	Token token = context_peek(context);
 
 	if (token.type == TokenType_Identifier)
@@ -338,6 +343,12 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context)
 
 		TokenType declaration_assignment_token = context_peek_type(context);
 
+		Statement statement =
+		{
+			.type = StatementType_Error,
+			.source_location = token.source_location,
+		};
+
 		if (declaration_assignment_token == TokenType_Colon)
 		{
 			context_advance(context);
@@ -345,39 +356,23 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context)
 			Token data_type_token = context_consume(context);
 			PrimitiveDatatype data_type = token_to_datatype(data_type_token.type);
 
+			statement.type = StatementType_Declaration;
+			statement.declaration = (DeclarationStatement) { .data_type = data_type, .lhs = lhs };
+
 			TokenType next = context_peek_type(context);
 			if (next == TokenType_Semicolon)
 			{
-				context_advance(context);
-
-				Expression expression =
-				{
-					.type = ExpressionType_Declaration,
-					.source_location = token.source_location,
-					.declaration = { .data_type = data_type, .lhs = lhs }
-				};
-				result = push_expression(context->program, expression);
+				statement.type = StatementType_Declaration;
+				statement.declaration = (DeclarationStatement) { .data_type = data_type, .lhs = lhs };
 			}
 			else if (next == TokenType_Equal)
 			{
 				context_advance(context);
 
 				ExpressionHandle rhs = parse_expression(context, 0);
-				if (rhs)
-				{
-					Expression expression =
-					{
-						.type = ExpressionType_DeclarationAssignment,
-						.source_location = token.source_location,
-						.declaration_assignment = {.data_type = data_type, .lhs = lhs, .rhs = rhs }
-					};
-					result = push_expression(context->program, expression);
-				}
 
-				if (context_expect(context, TokenType_Semicolon))
-				{
-					context_advance(context);
-				}
+				statement.type = StatementType_DeclarationAssignment;
+				statement.declaration_assignment = (DeclarationAssignmentStatement) { .data_type = data_type, .lhs = lhs, .rhs = rhs };
 			}
 			else
 			{
@@ -390,29 +385,26 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context)
 			context_advance(context);
 
 			ExpressionHandle rhs = parse_expression(context, 0);
-			if (rhs)
-			{
-				Expression expression =
-				{
-					.type = ExpressionType_DeclarationAssignment,
-					.source_location = token.source_location,
-					.declaration_assignment = {.data_type = PrimitiveDatatype_Unknown, .lhs = lhs, .rhs = rhs }
-				};
-				result = push_expression(context->program, expression);
-			}
 
-			if (context_expect(context, TokenType_Semicolon))
-			{
-				context_advance(context);
-			}
+			statement.type = StatementType_DeclarationAssignment;
+			statement.declaration_assignment = (DeclarationAssignmentStatement){ .data_type = PrimitiveDatatype_Unknown, .lhs = lhs, .rhs = rhs };
 		}
 		else if (token_is_assignment_operator(declaration_assignment_token))
 		{
 			context_withdraw(context);
-			result = parse_expression(context, 0);
+			ExpressionHandle expression = parse_expression(context, 0);
+
+			statement.type = StatementType_Simple;
+			statement.simple = (SimpleStatement) { .expression = expression };
+		}
+
+		if (statement.type != StatementType_Error)
+		{
 			if (context_expect(context, TokenType_Semicolon))
 			{
 				context_advance(context);
+				push_statement(context->program, statement);
+				return 1;
 			}
 		}
 	}
@@ -425,26 +417,28 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context)
 			ExpressionHandle condition = parse_expression(context, 0);
 			if (condition)
 			{
-				ExpressionHandle then_expression = parse_top_level_expression(context);
-				if (then_expression)
+				Statement statement =
 				{
-					ExpressionHandle else_expression = 0;
+					.type = StatementType_Branch,
+					.source_location = token.source_location,
+					.branch = {.condition = condition }
+				};
+				i32 statement_index = push_statement(context->program, statement);
 
-					TokenType next_token = context_peek_type(context);
-					if (next_token == TokenType_Else)
-					{
-						context_advance(context);
-						else_expression = parse_top_level_expression(context);
-					}
+				i32 then_statement_count = parse_statement(context);
+				i32 else_statement_count = 0;
 
-					Expression branch_expression =
-					{
-						.type = ExpressionType_Branch,
-						.source_location = token.source_location,
-						.branch = {.condition = condition, .then_expression = then_expression, .else_expression = else_expression }
-					};
-					result = push_expression(context->program, branch_expression);
+				TokenType next_token = context_peek_type(context);
+				if (next_token == TokenType_Else)
+				{
+					context_advance(context);
+					else_statement_count = parse_statement(context);
 				}
+
+				context->program->statements.items[statement_index].branch.then_statement_count = then_statement_count;
+				context->program->statements.items[statement_index].branch.else_statement_count = else_statement_count;
+
+				return then_statement_count + else_statement_count + 1;
 			}
 		}
 	}
@@ -457,17 +451,18 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context)
 			ExpressionHandle condition = parse_expression(context, 0);
 			if (condition)
 			{
-				ExpressionHandle then_expression = parse_top_level_expression(context);
-				if (then_expression)
+				Statement statement =
 				{
-					Expression loop_expression =
-					{
-						.type = ExpressionType_Loop,
-						.source_location = token.source_location,
-						.loop = {.condition = condition, .then_expression = then_expression }
-					};
-					result = push_expression(context->program, loop_expression);
-				}
+					.type = StatementType_Loop,
+					.source_location = token.source_location,
+					.loop = { .condition = condition }
+				};
+				i32 statement_index = push_statement(context->program, statement);
+
+				i32 then_statement_count = parse_statement(context);
+				context->program->statements.items[statement_index].loop.then_statement_count = then_statement_count;
+
+				return then_statement_count + 1;
 			}
 		}
 	}
@@ -475,23 +470,21 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context)
 	{
 		context_advance(context);
 
-		if (context_expect_not_eof(context))
+		ExpressionHandle rhs = parse_expression(context, 0);
+		if (rhs)
 		{
-			ExpressionHandle rhs = parse_expression(context, 0);
-			if (rhs)
+			if (context_expect(context, TokenType_Semicolon))
 			{
-				if (context_expect(context, TokenType_Semicolon))
-				{
-					context_advance(context);
+				context_advance(context);
 
-					Expression return_expression =
-					{
-						.type = ExpressionType_Return,
-						.source_location = token.source_location,
-						.ret = {.rhs = rhs }
-					};
-					result = push_expression(context->program, return_expression);
-				}
+				Statement statement =
+				{
+					.type = StatementType_Return,
+					.source_location = token.source_location,
+					.ret = {.rhs = rhs }
+				};
+				push_statement(context->program, statement);
+				return true;
 			}
 		}
 	}
@@ -499,58 +492,59 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context)
 	{
 		context_advance(context);
 
-		Expression block_expression =
+		Statement statement =
 		{
-			.type = ExpressionType_Block,
+			.type = StatementType_Block,
 			.source_location = token.source_location,
 		};
 
-		ExpressionHandle last = 0;
+		i32 statement_index = push_statement(context->program, statement);
+
+		i32 statement_count = 0;
 		while (context_expect_not_eof(context) && context_peek_type(context) != TokenType_CloseBrace)
 		{
-			ExpressionHandle expression = parse_top_level_expression(context);
-			if (last)
-			{
-				program_get_expression(context->program, last)->next = expression;
-			}
-			else
-			{
-				block_expression.block.first_expression = expression;
-			}
-			last = expression;
+			statement_count += parse_statement(context);
 		}
+		context->program->statements.items[statement_index].block.statement_count = statement_count;
 
 		if (context_expect(context, TokenType_CloseBrace))
 		{
 			context_advance(context);
+			return statement_count + 1;
 		}
-
-		result = push_expression(context->program, block_expression);
 	}
 	else
 	{
-		result = parse_expression(context, 0);
-		if (context_expect(context, TokenType_Semicolon))
+		ExpressionHandle expression = parse_expression(context, 0);
+		if (expression)
 		{
-			context_advance(context);
+			if (context_expect(context, TokenType_Semicolon))
+			{
+				context_advance(context);
+				Statement statement =
+				{
+					.type = StatementType_Simple,
+					.source_location = token.source_location,
+					.simple = {.expression = expression },
+				};
+				push_statement(context->program, statement);
+				return 1;
+			}
 		}
 	}
 
-	if (result == ExpressionType_Error)
+	// Error -> flush to next semicolon.
+	for (; context_peek_type(context) != TokenType_Semicolon && context_peek_type(context) != TokenType_EOF; context_advance(context))
 	{
-		// Error -> flush to next semicolon.
-		for (; context_peek_type(context) != TokenType_Semicolon && context_peek_type(context) != TokenType_EOF; context_advance(context))
-		{
-		}
-
-		if (context_peek_type(context) != TokenType_EOF)
-		{
-			assert(context_peek_type(context) == TokenType_Semicolon);
-			context_advance(context);
-		}
 	}
 
-	return result;
+	if (context_peek_type(context) != TokenType_EOF)
+	{
+		assert(context_peek_type(context) == TokenType_Semicolon);
+		context_advance(context);
+	}
+
+	return 0;
 }
 
 static b32 parse_function(ParseContext* context)
@@ -655,14 +649,19 @@ static b32 parse_function(ParseContext* context)
 	}
 	// Don't advance.
 
-	ExpressionHandle body_expression = parse_top_level_expression(context);
-
+	i32 body_statement_index = (i32)context->program->statements.count;
+	i32 body_statement_count = parse_statement(context);
+	if (!body_statement_count)
+	{
+		return false;
+	}
 
 	Function function = { 0 };
 	function.name = get_token_string(context, name_token);
 	function.source_location = source_location;
 	function.calling_convention = CallingConvention_Windows_x64;
-	function.first_expression = body_expression;
+	function.body_first_statement = body_statement_index;
+	function.body_statement_count = body_statement_count;
 	function.first_parameter = first_parameter;
 	function.parameter_count = parameter_count;
 
