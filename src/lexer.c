@@ -87,7 +87,8 @@ static const TokenKeywordMapping token_keyword_map[] =
 	{.str = string("b32"),		.type = TokenType_B32 },
 	{ .str = string("i32"),		.type = TokenType_I32 },
 	{ .str = string("u32"),		.type = TokenType_U32 },
-	{ .str = string("f32"),		.type = TokenType_F32 },
+	{.str = string("f32"),		.type = TokenType_F32 },
+	{ .str = string("String"),	.type = TokenType_String },
 };
 #undef string
 
@@ -167,23 +168,23 @@ Continuations:
 			if (string_equal(token_string, string_from_cstr("true")))
 			{
 				token.type = TokenType_NumericLiteral;
-				token.data_index = (i32)stream.literals.count;
+				token.data_index = (i32)stream.numeric_literals.count;
 				PrimitiveData literal = { .type = PrimitiveDatatype_B32, .data_b32 = true };
-				array_push(&stream.literals, literal);
+				array_push(&stream.numeric_literals, literal);
 			}
 			else if (string_equal(token_string, string_from_cstr("false")))
 			{
 				token.type = TokenType_NumericLiteral;
-				token.data_index = (i32)stream.literals.count;
+				token.data_index = (i32)stream.numeric_literals.count;
 				PrimitiveData literal = { .type = PrimitiveDatatype_B32, .data_b32 = false };
-				array_push(&stream.literals, literal);
+				array_push(&stream.numeric_literals, literal);
 			}
 			
 			if (token.type == TokenType_Unknown)
 			{
 				token.type = TokenType_Identifier;
-				token.data_index = (i32)stream.identifiers.count;
-				array_push(&stream.identifiers, token_string);
+				token.data_index = (i32)stream.strings.count;
+				array_push(&stream.strings, token_string);
 			}
 		}
 		else if (isdigit(c))
@@ -235,8 +236,21 @@ Continuations:
 				assert(false);
 			}
 
-			token.data_index = (i32)stream.literals.count;
-			array_push(&stream.literals, literal);
+			token.data_index = (i32)stream.numeric_literals.count;
+			array_push(&stream.numeric_literals, literal);
+		}
+		else if (c == '"' && next_c)
+		{
+			assert(token_string.len == 1);
+
+			for (i64 i = c_index + 1; i < source_code.len && source_code.str[i] != '"'; ++i)
+			{
+				++token_string.len;
+			}
+
+			token.data_index = (i32)stream.strings.count;
+			String literal = { .str = token_string.str + 1, .len = token_string.len - 1 };
+			array_push(&stream.strings, literal);
 		}
 
 		array_push(&stream.tokens, token);
@@ -244,7 +258,7 @@ Continuations:
 		c_index += token_string.len - 1;
 	}
 
-	Token eof_token = { .type = TokenType_EOF };
+	Token eof_token = { .type = TokenType_EOF, .source_location = { .global_character_index = source_code.len, .line = line } };
 	array_push(&stream.tokens, eof_token);
 
 	return stream;
@@ -253,8 +267,8 @@ Continuations:
 void free_token_stream(TokenStream* tokens)
 {
 	array_free(&tokens->tokens);
-	array_free(&tokens->identifiers);
-	array_free(&tokens->literals);
+	array_free(&tokens->strings);
+	array_free(&tokens->numeric_literals);
 }
 
 void print_tokens(TokenStream* tokens)
@@ -265,12 +279,12 @@ void print_tokens(TokenStream* tokens)
 
 		if (token.type == TokenType_Identifier)
 		{
-			String identifer = tokens->identifiers.items[token.data_index];
+			String identifer = tokens->strings.items[token.data_index];
 			printf("%.*s ", (i32)identifer.len, identifer.str);
 		}
 		else if (token.type == TokenType_NumericLiteral)
 		{
-			PrimitiveData literal = tokens->literals.items[token.data_index];
+			PrimitiveData literal = tokens->numeric_literals.items[token.data_index];
 			printf("%s ", serialize_primitive_data(literal));
 		}
 		else

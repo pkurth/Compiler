@@ -197,6 +197,7 @@ enum TokenType
 	TokenType_U32,
 	TokenType_I32,
 	TokenType_F32,
+	TokenType_String,
 
 
 	// Parentheses, brackets, braces.
@@ -260,6 +261,7 @@ enum TokenType
 	// Other.
 	TokenType_Identifier,
 	TokenType_NumericLiteral,
+	TokenType_StringLiteral,
 
 
 	TokenType_Count,
@@ -325,8 +327,8 @@ typedef struct Token Token;
 struct TokenStream
 {
 	DynamicArray(Token) tokens;
-	DynamicArray(String) identifiers;
-	DynamicArray(PrimitiveData) literals;
+	DynamicArray(String) strings;
+	DynamicArray(PrimitiveData) numeric_literals;
 };
 typedef struct TokenStream TokenStream;
 

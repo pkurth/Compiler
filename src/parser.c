@@ -154,7 +154,7 @@ static ExpressionHandle parse_atom(ParseContext* context)
 	}
 	else if (token.type == TokenType_NumericLiteral)
 	{
-		PrimitiveData literal = context->tokens.literals.items[token.data_index];
+		PrimitiveData literal = context->tokens.numeric_literals.items[token.data_index];
 		Expression expression = 
 		{ 
 			.type = ExpressionType_NumericLiteral,
@@ -166,7 +166,7 @@ static ExpressionHandle parse_atom(ParseContext* context)
 	}
 	else if (token.type == TokenType_Identifier)
 	{
-		String identifier = context->tokens.identifiers.items[token.data_index];
+		String identifier = context->tokens.strings.items[token.data_index];
 
 		if (context_peek_type(context) == TokenType_OpenParenthesis)
 		{
@@ -323,7 +323,7 @@ static ExpressionHandle parse_top_level_expression(ParseContext* context)
 		if (context_expect(context, TokenType_Identifier))
 		{
 			Token identifier_token = context_consume(context);
-			String identifier = context->tokens.identifiers.items[identifier_token.data_index];
+			String identifier = context->tokens.strings.items[identifier_token.data_index];
 
 			Expression lhs_expression = 
 			{ 
@@ -531,7 +531,7 @@ static b32 parse_function_parameters(ParseContext* context, Function* function)
 				return false;
 			}
 			Token identifier_token = context_consume(context);
-			String identifier = context->tokens.identifiers.items[identifier_token.data_index];
+			String identifier = context->tokens.strings.items[identifier_token.data_index];
 
 			FunctionParameter parameter = { .name = identifier };
 			array_push(&context->program->function_parameters, parameter);
@@ -612,7 +612,7 @@ static b32 parse_function(ParseContext* context)
 	if (context_expect(context, TokenType_Identifier))
 	{
 		Token identifier_token = context_consume(context);
-		String identifier = context->tokens.identifiers.items[identifier_token.data_index];
+		String identifier = context->tokens.strings.items[identifier_token.data_index];
 		function.name = identifier;
 	}
 

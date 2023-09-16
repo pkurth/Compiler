@@ -53,6 +53,7 @@ static const char* token_strings[TokenType_Count] =
 	[TokenType_I32]					= "i32",
 	[TokenType_U32]					= "u32",
 	[TokenType_F32]					= "f32",
+	[TokenType_String]				= "String",
 	[TokenType_OpenParenthesis]		= "(",
 	[TokenType_CloseParenthesis]	= ")",
 	[TokenType_OpenBracket]			= "[",

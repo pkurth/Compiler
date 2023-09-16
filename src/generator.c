@@ -291,9 +291,10 @@ String generate(Program program)
 		"bits 64\n"
 		"default rel\n"
 		"\n"
-		"segment .text\n"
 		"global __main\n"
 		"extern ExitProcess\n"
+		"\n"
+		"segment .text\n"
 		"\n"
 	);
 
