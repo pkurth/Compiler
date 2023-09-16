@@ -43,7 +43,8 @@ const char* data_type_to_string(PrimitiveDatatype type)
 static const char* token_strings[TokenType_Count] =
 {
 	[TokenType_Unknown]				= "UNKNOWN",
-	[TokenType_EOF]					= "",
+	[TokenType_EOF]					= "EOF",
+	[TokenType_Function]			= "fn",
 	[TokenType_If]					= "if",
 	[TokenType_Else]				= "else",
 	[TokenType_While]				= "while",
@@ -53,7 +54,6 @@ static const char* token_strings[TokenType_Count] =
 	[TokenType_I32]					= "i32",
 	[TokenType_U32]					= "u32",
 	[TokenType_F32]					= "f32",
-	[TokenType_String]				= "String",
 	[TokenType_OpenParenthesis]		= "(",
 	[TokenType_CloseParenthesis]	= ")",
 	[TokenType_OpenBracket]			= "[",

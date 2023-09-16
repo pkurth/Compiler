@@ -65,6 +65,8 @@ static TokenContinuation token_continuations[TokenType_Count] =
 
 	[TokenType_LessLess] = { 1, { {.c = '=', .type = TokenType_LessLessEqual } } },
 	[TokenType_GreaterGreater] = { 1, { {.c = '=', .type = TokenType_GreaterGreaterEqual } } },
+
+	[TokenType_Colon] = { 1, { { .c = ':', .type = TokenType_ColonColon } } },
 };
 
 
@@ -79,6 +81,7 @@ typedef struct TokenKeywordMapping TokenKeywordMapping;
 #define string(cstr) { .str = cstr, .len = sizeof(cstr) - 1 }
 static const TokenKeywordMapping token_keyword_map[] =
 {
+	{ .str = string("fn"),		.type = TokenType_Function },
 	{ .str = string("if"),		.type = TokenType_If },
 	{ .str = string("else"),	.type = TokenType_Else },
 	{ .str = string("while"),	.type = TokenType_While },
@@ -88,7 +91,6 @@ static const TokenKeywordMapping token_keyword_map[] =
 	{ .str = string("i32"),		.type = TokenType_I32 },
 	{ .str = string("u32"),		.type = TokenType_U32 },
 	{.str = string("f32"),		.type = TokenType_F32 },
-	{ .str = string("String"),	.type = TokenType_String },
 };
 #undef string
 
@@ -258,7 +260,7 @@ Continuations:
 		c_index += token_string.len - 1;
 	}
 
-	Token eof_token = { .type = TokenType_EOF, .source_location = { .global_character_index = source_code.len, .line = line } };
+	Token eof_token = { .type = TokenType_EOF, .source_location = { .global_character_index = (i32)source_code.len, .line = line } };
 	array_push(&stream.tokens, eof_token);
 
 	return stream;

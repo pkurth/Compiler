@@ -594,6 +594,10 @@ static b32 parse_function(ParseContext* context)
 	function.calling_convention = CallingConvention_Windows_x64;
 	function.source_location = context_peek(context).source_location;
 
+
+
+
+
 	if (!parse_function_parameters(context, &function))
 	{
 		return false;

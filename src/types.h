@@ -188,6 +188,7 @@ enum TokenType
 
 
 	// Keywords.
+	TokenType_Function,
 	TokenType_If,
 	TokenType_Else,
 	TokenType_While,
@@ -197,7 +198,6 @@ enum TokenType
 	TokenType_U32,
 	TokenType_I32,
 	TokenType_F32,
-	TokenType_String,
 
 
 	// Parentheses, brackets, braces.
@@ -214,6 +214,7 @@ enum TokenType
 	TokenType_Period,
 	TokenType_Comma,
 	TokenType_Colon,
+	TokenType_ColonColon,
 	TokenType_Hashtag,
 	TokenType_Dollar,
 	TokenType_At,
@@ -267,7 +268,7 @@ enum TokenType
 	TokenType_Count,
 
 
-	TokenType_FirstKeyword = TokenType_If,
+	TokenType_FirstKeyword = TokenType_Function,
 	TokenType_LastKeyword = TokenType_F32,
 
 	TokenType_FirstDatatype = TokenType_B32,

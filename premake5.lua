@@ -42,6 +42,7 @@ workspace "Compiler"
 	
 	workspacefiles {
         "premake5.lua",
+		"debugger.natvis",
     }
 
 
