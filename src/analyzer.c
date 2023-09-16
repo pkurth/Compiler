@@ -349,11 +349,14 @@ static b32 analyze_top_level_expression(Program* program, ExpressionHandle expre
 
 			if (!analyze_expression(program, e.rhs, stack_info)) { break; }
 
+			Expression* rhs = program_get_expression(program, e.rhs);
 			Expression* lhs = program_get_expression(program, e.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
+			PrimitiveDatatype data_type = (e.data_type == PrimitiveDatatype_Unknown) ? rhs->result_data_type : e.data_type;
+
 			String identifier = lhs->identifier.name;
-			if (!add_local_variable(program, identifier, e.data_type, expression->source_location, stack_info, first_local_variable_in_current_block)) { break; }
+			if (!add_local_variable(program, identifier, data_type, expression->source_location, stack_info, first_local_variable_in_current_block)) { break; }
 			if (!analyze_expression(program, e.lhs, stack_info)) { break; }
 		}
 		else if (expression->type == ExpressionType_Return)

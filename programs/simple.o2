@@ -1,11 +1,11 @@
 
 
-(i32 x) -> (i32) square =
+fn square :: (x : i32) -> (i32)
 {
 	return x * x;
 }
 
-(i32 i) -> (i32) fib = 
+fn fib :: (i : i32) -> (i32)
 {
 	if (i <= 1)
 	{
@@ -14,20 +14,28 @@
 	return fib(i - 1) + fib(i - 2);
 }
 
-(i32 i0, i32 i1, i32 i2, i32 i3, i32 i4, i32 i5) -> (i32) multi_arg =
+fn multi_arg :: 
+	(i0 : i32, 
+	i1 : i32, 
+	i2 : i32, 
+	i3 : i32, 
+	i4 : i32, 
+	i5 : i32)
+ 	-> (i32)
 {
 	return i4;
 }
 
-() -> (i32) main =
+fn main :: () -> (i32)
 {
-	i32 a = 7; // comment
-	i32 b = 4 + a * 3 + -(22 + -1);
+	a := 7; // comment
+
+	b := 4 + a * 3 + -(22 + -1);
 	//b = 3 * 4 + 5;
 
 	{
-		i32 d = 24 * a;
-		i32 b = 100;
+		d := 24 * a;
+		b := 100;
 	}
 	
 	//b <<= 2;
@@ -39,16 +47,16 @@
 	// b == 137
 
 	if (b == 0)
-		i32 b = 200;
+		b := 200;
 	else if (b > 100)
 		b = 100;
 	else
 		b = 0;
 
 
-	i32 v = 7;
+	v := 7;
 	
-	i32 x = 0;
+	x := 0;
 	while (x < 10)
 	{
 		v *= 2;
@@ -58,7 +66,7 @@
 	// v == 7168
 
 	// comment
-	i32 c = 33 >= 10;
+	c := 33 >= 10;
 
 	b = square(square(4) * 2);
 

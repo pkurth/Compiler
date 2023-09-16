@@ -215,6 +215,7 @@ enum TokenType
 	TokenType_Comma,
 	TokenType_Colon,
 	TokenType_ColonColon,
+	TokenType_ColonEqual,
 	TokenType_Hashtag,
 	TokenType_Dollar,
 	TokenType_At,

@@ -66,7 +66,7 @@ static TokenContinuation token_continuations[TokenType_Count] =
 	[TokenType_LessLess] = { 1, { {.c = '=', .type = TokenType_LessLessEqual } } },
 	[TokenType_GreaterGreater] = { 1, { {.c = '=', .type = TokenType_GreaterGreaterEqual } } },
 
-	[TokenType_Colon] = { 1, { { .c = ':', .type = TokenType_ColonColon } } },
+	[TokenType_Colon] = { 2, { { .c = ':', .type = TokenType_ColonColon }, { .c = '=', .type = TokenType_ColonEqual } } },
 };
 
 
