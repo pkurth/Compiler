@@ -171,15 +171,15 @@ Continuations:
 			{
 				token.type = TokenType_NumericLiteral;
 				token.data_index = (i32)stream.numeric_literals.count;
-				PrimitiveData literal = { .type = PrimitiveDatatype_B32, .data_b32 = true };
-				array_push(&stream.numeric_literals, literal);
+				NumericLiteral numeric_literal = { .type = NumericDatatype_B32, .data_b32 = true };
+				array_push(&stream.numeric_literals, numeric_literal);
 			}
 			else if (string_equal(token_string, string_from_cstr("false")))
 			{
 				token.type = TokenType_NumericLiteral;
 				token.data_index = (i32)stream.numeric_literals.count;
-				PrimitiveData literal = { .type = PrimitiveDatatype_B32, .data_b32 = false };
-				array_push(&stream.numeric_literals, literal);
+				NumericLiteral numeric_literal = { .type = NumericDatatype_B32, .data_b32 = false };
+				array_push(&stream.numeric_literals, numeric_literal);
 			}
 			
 			if (token.type == TokenType_Unknown)
@@ -193,7 +193,7 @@ Continuations:
 		{
 			token.type = TokenType_NumericLiteral;
 
-			PrimitiveData literal = { .type = PrimitiveDatatype_I32 };
+			NumericLiteral numeric_literal = { .type = NumericDatatype_I32 };
 			b32 e_found = false;
 
 			for (i64 i = c_index + 1; i < source_code.len; ++i)
@@ -201,13 +201,13 @@ Continuations:
 				char c = source_code.str[i];
 				if (!isdigit(c))
 				{
-					if (literal.type == PrimitiveDatatype_I32)
+					if (numeric_literal.type == NumericDatatype_I32)
 					{
-						if (c == '.') { literal.type = PrimitiveDatatype_F32; }
-						if (c == 'e') { literal.type = PrimitiveDatatype_F32; e_found = true; }
+						if (c == '.') { numeric_literal.type = NumericDatatype_F32; }
+						if (c == 'e') { numeric_literal.type = NumericDatatype_F32; e_found = true; }
 						else { break; }
 					}
-					else if (literal.type == PrimitiveDatatype_F32)
+					else if (numeric_literal.type == NumericDatatype_F32)
 					{
 						if (!e_found && c == 'e') { e_found = true; }
 						else { break; }
@@ -225,13 +225,13 @@ Continuations:
 			memcpy(buf, token_string.str, token_string.len);
 			buf[token_string.len] = 0;
 
-			if (literal.type == PrimitiveDatatype_I32)
+			if (numeric_literal.type == NumericDatatype_I32)
 			{
-				literal.data_i32 = atoi(buf);
+				numeric_literal.data_i32 = atoi(buf);
 			}
-			else if (literal.type == PrimitiveDatatype_F32)
+			else if (numeric_literal.type == NumericDatatype_F32)
 			{
-				literal.data_f32 = (f32)atof(buf);
+				numeric_literal.data_f32 = (f32)atof(buf);
 			}
 			else
 			{
@@ -239,7 +239,7 @@ Continuations:
 			}
 
 			token.data_index = (i32)stream.numeric_literals.count;
-			array_push(&stream.numeric_literals, literal);
+			array_push(&stream.numeric_literals, numeric_literal);
 		}
 		else if (c == '"' && next_c)
 		{
@@ -286,8 +286,8 @@ void print_tokens(TokenStream* tokens)
 		}
 		else if (token.type == TokenType_NumericLiteral)
 		{
-			PrimitiveData literal = tokens->numeric_literals.items[token.data_index];
-			printf("%s ", serialize_primitive_data(literal));
+			NumericLiteral numeric_literal = tokens->numeric_literals.items[token.data_index];
+			printf("%s ", serialize_numeric_literal(numeric_literal));
 		}
 		else
 		{

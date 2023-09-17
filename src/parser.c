@@ -148,6 +148,11 @@ static String get_token_string(ParseContext* context, Token token)
 	return context->tokens.strings.items[token.data_index];
 }
 
+static NumericLiteral get_token_numeric_literal(ParseContext* context, Token token)
+{
+	return context->tokens.numeric_literals.items[token.data_index];
+}
+
 static ExpressionHandle parse_expression(ParseContext* context, i32 min_precedence);
 
 static ExpressionHandle parse_atom(ParseContext* context)
@@ -166,13 +171,23 @@ static ExpressionHandle parse_atom(ParseContext* context)
 	}
 	else if (token.type == TokenType_NumericLiteral)
 	{
-		PrimitiveData literal = context->tokens.numeric_literals.items[token.data_index];
+		NumericLiteral numeric_literal = get_token_numeric_literal(context, token);
 		Expression expression = 
 		{ 
 			.type = ExpressionType_NumericLiteral,
 			.source_location = token.source_location,
-			.literal = literal,
-			.result_data_type = literal.type
+			.numeric_literal = numeric_literal,
+		};
+		return push_expression(context->program, expression);
+	}
+	else if (token.type == TokenType_StringLiteral)
+	{
+		String string_literal = get_token_string(context, token);
+		Expression expression =
+		{
+			.type = ExpressionType_StringLiteral,
+			.source_location = token.source_location,
+			.string_literal = string_literal,
 		};
 		return push_expression(context->program, expression);
 	}
@@ -189,9 +204,7 @@ static ExpressionHandle parse_atom(ParseContext* context)
 				.type = ExpressionType_FunctionCall,
 				.source_location = token.source_location,
 				.function_call = {.function_name = identifier, .first_argument = 0 },
-				.result_data_type = PrimitiveDatatype_I32
-			}; // TODO: result_data_type.
-
+			};
 
 			ExpressionHandle last = 0;
 			while (context_expect_not_eof(context) && context_peek_type(context) != TokenType_CloseParenthesis)
@@ -232,8 +245,7 @@ static ExpressionHandle parse_atom(ParseContext* context)
 				.type = ExpressionType_Identifier,
 				.source_location = token.source_location,
 				.identifier = identifier,
-				.result_data_type = PrimitiveDatatype_I32
-			}; // TODO: result_data_type.
+			};
 			return push_expression(context->program, expression);
 		}
 	}
@@ -354,7 +366,7 @@ static i32 parse_statement(ParseContext* context)
 			context_advance(context);
 
 			Token data_type_token = context_consume(context);
-			PrimitiveDatatype data_type = token_to_datatype(data_type_token.type);
+			NumericDatatype data_type = token_to_numeric(data_type_token.type);
 
 			statement.type = StatementType_Declaration;
 			statement.declaration = (DeclarationStatement) { .data_type = data_type, .lhs = lhs };
@@ -385,9 +397,10 @@ static i32 parse_statement(ParseContext* context)
 			context_advance(context);
 
 			ExpressionHandle rhs = parse_expression(context, 0);
+			NumericDatatype data_type = NumericDatatype_Unknown;
 
 			statement.type = StatementType_DeclarationAssignment;
-			statement.declaration_assignment = (DeclarationAssignmentStatement){ .data_type = PrimitiveDatatype_Unknown, .lhs = lhs, .rhs = rhs };
+			statement.declaration_assignment = (DeclarationAssignmentStatement){ .data_type = data_type, .lhs = lhs, .rhs = rhs };
 		}
 		else if (token_is_assignment_operator(declaration_assignment_token))
 		{
@@ -484,7 +497,7 @@ static i32 parse_statement(ParseContext* context)
 					.ret = {.rhs = rhs }
 				};
 				push_statement(context->program, statement);
-				return true;
+				return 1;
 			}
 		}
 	}
@@ -501,9 +514,11 @@ static i32 parse_statement(ParseContext* context)
 		i32 statement_index = push_statement(context->program, statement);
 
 		i32 statement_count = 0;
+		i32 direct_statement_count = 0;
 		while (context_expect_not_eof(context) && context_peek_type(context) != TokenType_CloseBrace)
 		{
 			statement_count += parse_statement(context);
+			++direct_statement_count;
 		}
 		context->program->statements.items[statement_index].block.statement_count = statement_count;
 

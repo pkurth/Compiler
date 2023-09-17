@@ -136,34 +136,33 @@ static void test()
 }
 #endif
 
-enum PrimitiveDatatype
+enum NumericDatatype
 {
-	PrimitiveDatatype_Unknown,
+	NumericDatatype_Unknown,
 
-	PrimitiveDatatype_B32,
-	PrimitiveDatatype_U32,
-	PrimitiveDatatype_I32,
-	PrimitiveDatatype_F32,
+	NumericDatatype_B32,
+	NumericDatatype_U32,
+	NumericDatatype_I32,
+	NumericDatatype_F32,
 
-	PrimitiveDatatype_Count,
+	NumericDatatype_Count,
 };
-typedef enum PrimitiveDatatype PrimitiveDatatype;
+typedef enum NumericDatatype NumericDatatype;
 
-static b32 data_type_is_integral(PrimitiveDatatype type)
+static b32 numeric_is_integral(NumericDatatype type)
 {
-	return type == PrimitiveDatatype_I32 || type == PrimitiveDatatype_U32;
+	return type == NumericDatatype_I32 || type == NumericDatatype_U32;
 }
 
-static b32 data_type_converts_to_b32(PrimitiveDatatype type)
+static b32 numeric_converts_to_b32(NumericDatatype type)
 {
-	return type == PrimitiveDatatype_B32 || data_type_is_integral(type);
+	return type == NumericDatatype_B32 || numeric_is_integral(type);
 }
 
-const char* data_type_to_string(PrimitiveDatatype type);
 
-struct PrimitiveData
+struct NumericLiteral
 {
-	PrimitiveDatatype type;
+	NumericDatatype type;
 
 	union
 	{
@@ -173,9 +172,10 @@ struct PrimitiveData
 		f32 data_f32;
 	};
 };
-typedef struct PrimitiveData PrimitiveData;
+typedef struct NumericLiteral NumericLiteral;
 
-const char* serialize_primitive_data(PrimitiveData data);
+const char* numeric_to_string(NumericDatatype type);
+const char* serialize_numeric_literal(NumericLiteral literal);
 
 
 
@@ -309,7 +309,7 @@ static b32 token_is_unary_operator(TokenType type)
 }
 
 const char* token_type_to_string(TokenType type);
-PrimitiveDatatype token_to_datatype(TokenType type);
+NumericDatatype token_to_numeric(TokenType type);
 
 struct SourceLocation
 {
@@ -330,7 +330,7 @@ struct TokenStream
 {
 	DynamicArray(Token) tokens;
 	DynamicArray(String) strings;
-	DynamicArray(PrimitiveData) numeric_literals;
+	DynamicArray(NumericLiteral) numeric_literals;
 };
 typedef struct TokenStream TokenStream;
 
@@ -376,6 +376,7 @@ enum ExpressionType
 
 	// Others.
 	ExpressionType_NumericLiteral,
+	ExpressionType_StringLiteral,
 	ExpressionType_Identifier,
 	ExpressionType_Assignment,
 	ExpressionType_FunctionCall,
@@ -455,12 +456,12 @@ struct Expression
 {
 	ExpressionType type;
 	SourceLocation source_location;
-	PrimitiveDatatype result_data_type;
 	ExpressionHandle next;
 
 	union
 	{
-		PrimitiveData literal;
+		NumericLiteral numeric_literal;
+		String string_literal;
 		IdentifierExpression identifier;
 		BinaryExpression binary;
 		UnaryExpression unary;
@@ -480,14 +481,14 @@ typedef struct SimpleStatement SimpleStatement;
 struct DeclarationStatement
 {
 	ExpressionHandle lhs;
-	PrimitiveDatatype data_type;
+	NumericDatatype data_type; // TODO: Generalize.
 };
 typedef struct DeclarationStatement DeclarationStatement;
 
 struct DeclarationAssignmentStatement
 {
 	ExpressionHandle lhs;
-	PrimitiveDatatype data_type;
+	NumericDatatype data_type; // TODO: Generalize.
 	ExpressionHandle rhs;
 };
 typedef struct DeclarationAssignmentStatement DeclarationAssignmentStatement;
@@ -557,7 +558,7 @@ struct LocalVariable
 {
 	String name;
 	i32 offset_from_frame_pointer;
-	PrimitiveDatatype data_type;
+	NumericDatatype data_type; // TODO: Generalize.
 	SourceLocation source_location;
 };
 typedef struct LocalVariable LocalVariable;

@@ -24,7 +24,7 @@ static void generate_exit(String* assembly)
 static void generate_function_header(String name, i64 stack_size, String* assembly)
 {
 	string_push(assembly,
-		"%.*s:\n"
+		"_%.*s:\n"
 		"    push rbp\n"
 		"    mov rbp, rsp\n"
 		"    sub rsp, %d\n",
@@ -52,7 +52,7 @@ static void generate_expression(Program* program, ExpressionHandle expression_ha
 	}
 	else if (expression->type == ExpressionType_NumericLiteral)
 	{
-		string_push(assembly, "    mov rax, %s\n", serialize_primitive_data(expression->literal));
+		string_push(assembly, "    mov rax, %s\n", serialize_numeric_literal(expression->numeric_literal));
 		stack_push("rax", assembly);
 	}
 	else if (expression_is_binary_operation(expression->type))
@@ -159,7 +159,7 @@ static void generate_expression(Program* program, ExpressionHandle expression_ha
 		i32 parameter_stack_size = max(32, parameter_count * 8);
 
 		string_push(assembly, "    sub rsp, %d\n", parameter_stack_size);
-		string_push(assembly, "    call %.*s\n", (i32)e.function_name.len, e.function_name.str);
+		string_push(assembly, "    call _%.*s\n", (i32)e.function_name.len, e.function_name.str);
 		string_push(assembly, "    add rsp, %d\n", parameter_stack_size);
 
 		stack_push("rax", assembly);
@@ -283,8 +283,8 @@ static void generate_function(Program* program, Function function, String* assem
 
 static void generate_start_function(String* assembly)
 {
-	generate_function_header(string_from_cstr("__main"), 0, assembly);
-	string_push(assembly, "    call main\n");
+	generate_function_header(string_from_cstr("_main"), 0, assembly);
+	string_push(assembly, "    call _main\n");
 	stack_push("rax", assembly);
 	generate_exit(assembly);
 }

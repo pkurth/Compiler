@@ -3,30 +3,22 @@
 #include <assert.h>
 
 
-static const char* data_type_strings[] =
-{
-	[PrimitiveDatatype_B32] = "b32",
-	[PrimitiveDatatype_I32] = "i32",
-	[PrimitiveDatatype_U32] = "u32",
-	[PrimitiveDatatype_F32] = "f32",
-};
-
-const char* serialize_primitive_data(PrimitiveData data)
+const char* serialize_numeric_literal(NumericLiteral data)
 {
 	static char result[128];
 
 	switch (data.type)
 	{
-		case PrimitiveDatatype_B32:
+		case NumericDatatype_B32:
 			snprintf(result, sizeof(result), data.data_b32 ? "1" : "0");
 			break;
-		case PrimitiveDatatype_I32:
+		case NumericDatatype_I32:
 			snprintf(result, sizeof(result), "%" PRIi32, data.data_i32);
 			break;
-		case PrimitiveDatatype_U32:
+		case NumericDatatype_U32:
 			snprintf(result, sizeof(result), "%" PRIu32, data.data_u32);
 			break;
-		case PrimitiveDatatype_F32:
+		case NumericDatatype_F32:
 			snprintf(result, sizeof(result), "%f", data.data_f32);
 			break;
 	}
@@ -34,9 +26,20 @@ const char* serialize_primitive_data(PrimitiveData data)
 	return result;
 }
 
-const char* data_type_to_string(PrimitiveDatatype type)
+const char* numeric_to_string(NumericDatatype type)
 {
-	return data_type_strings[type];
+	switch (type)
+	{
+		case NumericDatatype_B32:
+			return "b32";
+		case NumericDatatype_I32:
+			return "i32";
+		case NumericDatatype_U32:
+			return "u32";
+		case NumericDatatype_F32:
+			return "f32";
+	}
+	return "Unknown datatype";
 }
 
 
@@ -107,17 +110,17 @@ const char* token_type_to_string(TokenType type)
 	return token_strings[type];
 }
 
-PrimitiveDatatype token_to_datatype(TokenType type)
+NumericDatatype token_to_numeric(TokenType type)
 {
 	switch (type)
 	{
-		case TokenType_B32: return PrimitiveDatatype_B32;
-		case TokenType_U32: return PrimitiveDatatype_U32;
-		case TokenType_I32: return PrimitiveDatatype_I32;
-		case TokenType_F32: return PrimitiveDatatype_F32;
+		case TokenType_B32: return NumericDatatype_B32;
+		case TokenType_U32: return NumericDatatype_U32;
+		case TokenType_I32: return NumericDatatype_I32;
+		case TokenType_F32: return NumericDatatype_F32;
 		default:
 			assert(false);
-			return PrimitiveDatatype_Unknown;
+			return NumericDatatype_Unknown;
 	}
 }
 
@@ -200,19 +203,23 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 
 	if (expression->type == ExpressionType_NumericLiteral)
 	{
-		printf("%s (%s, %d)\n", serialize_primitive_data(expression->literal), data_type_to_string(expression->result_data_type), (i32)expression_handle);
+		printf("%s\n", serialize_numeric_literal(expression->numeric_literal));
+	}
+	else if (expression->type == ExpressionType_StringLiteral)
+	{
+		printf("%.*s\n", (i32)expression->string_literal.len, expression->string_literal.str);
 	}
 	else if (expression->type == ExpressionType_Identifier)
 	{
 		IdentifierExpression e = expression->identifier;
 
-		printf("%.*s (%s, %d)\n", (i32)e.name.len, e.name.str, data_type_to_string(expression->result_data_type), (i32)expression_handle);
+		printf("%.*s\n", (i32)e.name.len, e.name.str);
 	}
 	else if (expression_is_binary_operation(expression->type))
 	{
 		BinaryExpression e = expression->binary;
 
-		printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
+		printf("%s\n", operator_strings[expression->type]);
 
 		set_bit(active_mask, indent + 1);
 		print_expression(program, e.lhs, indent + 1, active_mask);
@@ -224,7 +231,7 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 	{
 		UnaryExpression e = expression->unary;
 
-		printf("%s (%s, %d)\n", operator_strings[expression->type], data_type_to_string(expression->result_data_type), (i32)expression_handle);
+		printf("%s\n", operator_strings[expression->type]);
 		print_expression(program, e.rhs, indent + 1, active_mask);
 	}
 	else if (expression->type == ExpressionType_Assignment)
@@ -264,8 +271,6 @@ static void print_expression(Program* program, ExpressionHandle expression_handl
 
 static void print_statements(Program* program, i32 first_statement, i32 statement_count, i32 indent, i32* active_mask)
 {
-	set_bit(active_mask, indent);
-
 	for (i32 i = 0; i < statement_count; ++i)
 	{
 		i32 statement_index = first_statement + i;
@@ -316,6 +321,7 @@ static void print_statements(Program* program, i32 first_statement, i32 statemen
 		{
 			printf("Block\n");
 
+			set_bit(active_mask, indent + 1);
 			print_statements(program, statement_index + 1, statement->block.statement_count, indent + 1, active_mask);
 			i += statement->block.statement_count;
 		}
@@ -325,9 +331,12 @@ static void print_statements(Program* program, i32 first_statement, i32 statemen
 
 			printf("Branch\n");
 
+			set_bit(active_mask, indent + 1);
 			print_expression(program, e.condition, indent + 1, active_mask);
 
+			if (!e.then_statement_count) { clear_bit(active_mask, indent + 1); }
 			print_statements(program, statement_index + 1, e.then_statement_count, indent + 1, active_mask);
+			clear_bit(active_mask, indent + 1);
 			print_statements(program, statement_index + e.then_statement_count + 1, e.else_statement_count, indent + 1, active_mask);
 			i += e.then_statement_count + e.else_statement_count;
 		}
@@ -337,8 +346,10 @@ static void print_statements(Program* program, i32 first_statement, i32 statemen
 
 			printf("Loop\n");
 
+			set_bit(active_mask, indent + 1);
 			print_expression(program, e.condition, indent + 1, active_mask);
 
+			clear_bit(active_mask, indent + 1);
 			print_statements(program, statement_index + 1, e.then_statement_count, indent + 1, active_mask);
 			i += e.then_statement_count;
 		}

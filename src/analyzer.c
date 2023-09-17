@@ -17,57 +17,51 @@ typedef struct StackInfo StackInfo;
 typedef i64 LogicalRegister;
 
 
-static PrimitiveDatatype unary_operation_result_datatype(PrimitiveDatatype rhs, ExpressionType expression_type)
+static NumericDatatype unary_operation_result_datatype(NumericDatatype rhs, ExpressionType expression_type)
 {
-	if (rhs == PrimitiveDatatype_Unknown)
+	if (rhs == NumericDatatype_Unknown)
 	{
-		return PrimitiveDatatype_Unknown;
+		return NumericDatatype_Unknown;
 	}
 
-	PrimitiveDatatype result;
+	NumericDatatype result = NumericDatatype_Unknown;
 
 	switch (expression_type)
 	{
 		case ExpressionType_Negate: 
-			result = min(rhs, PrimitiveDatatype_I32);
+			result = min(rhs, NumericDatatype_I32);
 			break;
-
 		case ExpressionType_BitwiseNot:
-			result = data_type_is_integral(rhs) ? rhs : PrimitiveDatatype_Unknown;
+			result = numeric_is_integral(rhs) ? rhs : NumericDatatype_Unknown;
 			break;
-
 		case ExpressionType_Not: 
-			result = data_type_converts_to_b32(rhs) ? PrimitiveDatatype_B32 : PrimitiveDatatype_Unknown;
-			break;
-		
-		default:
-			result = PrimitiveDatatype_Unknown;
+			result = numeric_converts_to_b32(rhs) ? NumericDatatype_B32 : NumericDatatype_Unknown;
 			break;
 	}
 
 	return result;
 }
 
-static PrimitiveDatatype binary_operation_result_datatype(PrimitiveDatatype lhs, PrimitiveDatatype rhs, ExpressionType expression_type)
+static NumericDatatype binary_operation_result_datatype(NumericDatatype lhs, NumericDatatype rhs, ExpressionType expression_type)
 {
-	if (lhs == PrimitiveDatatype_Unknown || rhs == PrimitiveDatatype_Unknown)
+	if (lhs == NumericDatatype_Unknown || rhs == NumericDatatype_Unknown)
 	{
-		return PrimitiveDatatype_Unknown;
+		return NumericDatatype_Unknown;
 	}
 
-	PrimitiveDatatype result;
+	NumericDatatype result = NumericDatatype_Unknown;
 
 	switch (expression_type)
 	{
 		case ExpressionType_LogicalOr:
 		case ExpressionType_LogicalAnd:
-			result = (data_type_converts_to_b32(lhs) && data_type_converts_to_b32(rhs)) ? PrimitiveDatatype_B32 : PrimitiveDatatype_Unknown;
+			result = (numeric_converts_to_b32(lhs) && numeric_converts_to_b32(rhs)) ? NumericDatatype_B32 : NumericDatatype_Unknown;
 			break;
 
 		case ExpressionType_BitwiseOr:
 		case ExpressionType_BitwiseXor:
 		case ExpressionType_BitwiseAnd:
-			result = (data_type_converts_to_b32(lhs) && data_type_converts_to_b32(rhs)) ? max(lhs, rhs) : PrimitiveDatatype_Unknown;
+			result = (numeric_converts_to_b32(lhs) && numeric_converts_to_b32(rhs)) ? max(lhs, rhs) : NumericDatatype_Unknown;
 			break;
 
 		case ExpressionType_Equal:
@@ -76,12 +70,12 @@ static PrimitiveDatatype binary_operation_result_datatype(PrimitiveDatatype lhs,
 		case ExpressionType_Greater:
 		case ExpressionType_LessEqual:
 		case ExpressionType_GreaterEqual:
-			result = PrimitiveDatatype_B32;
+			result = NumericDatatype_B32;
 			break;
 
 		case ExpressionType_LeftShift:
 		case ExpressionType_RightShift:
-			result = (data_type_is_integral(lhs) && data_type_is_integral(rhs)) ? max(lhs, rhs) : PrimitiveDatatype_Unknown;
+			result = (numeric_is_integral(lhs) && numeric_is_integral(rhs)) ? max(lhs, rhs) : NumericDatatype_Unknown;
 			break;
 
 		case ExpressionType_Addition:
@@ -92,11 +86,7 @@ static PrimitiveDatatype binary_operation_result_datatype(PrimitiveDatatype lhs,
 			break;
 
 		case ExpressionType_Modulo:
-			result = (data_type_is_integral(lhs) && data_type_is_integral(rhs)) ? max(lhs, rhs) : PrimitiveDatatype_Unknown;
-			break;
-
-		default:
-			result = PrimitiveDatatype_Unknown;
+			result = (numeric_is_integral(lhs) && numeric_is_integral(rhs)) ? max(lhs, rhs) : NumericDatatype_Unknown;
 			break;
 	}
 
@@ -130,7 +120,7 @@ static b32 assert_no_variable_name_collision(Program* program, String identifier
 	return true;
 }
 
-static b32 add_local_variable(Program* program, String identifier, PrimitiveDatatype data_type, SourceLocation source_location,
+static b32 add_local_variable(Program* program, String identifier, NumericDatatype data_type, SourceLocation source_location,
 	StackInfo* stack_info, i64 first_local_variable_in_current_block)
 {
 	if (!assert_no_variable_name_collision(program, identifier, source_location, stack_info, first_local_variable_in_current_block))
@@ -154,7 +144,7 @@ static b32 add_local_variable(Program* program, String identifier, PrimitiveData
 	return true;
 }
 
-static b32 add_parameter_variable(Program* program, String identifier, PrimitiveDatatype data_type, SourceLocation source_location,
+static b32 add_parameter_variable(Program* program, String identifier, NumericDatatype data_type, SourceLocation source_location,
 	i32 parameter_index, StackInfo* stack_info, i64 first_local_variable_in_current_block)
 {
 	if (!assert_no_variable_name_collision(program, identifier, source_location, stack_info, first_local_variable_in_current_block))
@@ -206,7 +196,7 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 			return false;
 		}
 
-		expression->result_data_type = var->data_type;
+		//expression->result_data_type = var->data_type;
 	}
 	else if (expression_is_binary_operation(expression->type))
 	{
@@ -224,7 +214,7 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 		Expression* lhs = program_get_expression(program, e.lhs);
 		Expression* rhs = program_get_expression(program, e.rhs);
 
-		expression->result_data_type = binary_operation_result_datatype(lhs->result_data_type, rhs->result_data_type, expression->type);
+		//expression->result_data_type = binary_operation_result_datatype(lhs->result_data_type, rhs->result_data_type, expression->type);
 	}
 	else if (expression_is_unary_operation(expression->type))
 	{
@@ -237,11 +227,15 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 
 		Expression* rhs = program_get_expression(program, e.rhs);
 
-		expression->result_data_type = unary_operation_result_datatype(rhs->result_data_type, expression->type);
+		//expression->result_data_type = unary_operation_result_datatype(rhs->result_data_type, expression->type);
 	}
 	else if (expression->type == ExpressionType_NumericLiteral)
 	{
-		expression->result_data_type = expression->literal.type;
+		//expression->result_data_type = expression->literal.type;
+	}
+	else if (expression->type == ExpressionType_StringLiteral)
+	{
+		//expression->result_data_type = expression->literal.type;
 	}
 	else if (expression->type == ExpressionType_Identifier)
 	{
@@ -256,7 +250,7 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 			return false;
 		}
 
-		expression->result_data_type = var->data_type;
+		//expression->result_data_type = var->data_type;
 		e->offset_from_frame_pointer = var->offset_from_frame_pointer;
 	}
 	else if (expression->type == ExpressionType_FunctionCall)
@@ -359,7 +353,7 @@ static b32 analyze_statements(Program* program, i32 first_statement, i32 stateme
 			Expression* lhs = program_get_expression(program, e.lhs);
 			assert(lhs->type == ExpressionType_Identifier); // Temporary.
 
-			PrimitiveDatatype data_type = (e.data_type == PrimitiveDatatype_Unknown) ? rhs->result_data_type : e.data_type;
+			NumericDatatype data_type = e.data_type;// (e.data_type == NumericDatatype_Unknown) ? rhs->result_data_type : e.data_type;
 
 			String identifier = lhs->identifier.name;
 			if (!add_local_variable(program, identifier, data_type, statement->source_location, stack_info, first_local_variable_in_current_block)) { return false; }
@@ -416,7 +410,7 @@ static b32 analyze_function(Program* program, Function* function, LocalVariableC
 	for (i64 i = 0; i < function->parameter_count; ++i)
 	{
 		FunctionParameter parameter = program->function_parameters.items[i + function->first_parameter];
-		if (!add_parameter_variable(program, parameter.name, PrimitiveDatatype_I32, function->source_location, (i32)i, &stack_info, variable_count))
+		if (!add_parameter_variable(program, parameter.name, NumericDatatype_I32, function->source_location, (i32)i, &stack_info, variable_count))
 		{
 			result = false;
 		}
