@@ -1,4 +1,4 @@
-#include "lexer.h"
+#include "token.h"
 
 #include <ctype.h>
 #include <assert.h>

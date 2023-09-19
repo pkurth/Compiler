@@ -1,94 +1,39 @@
-#include "lexer.h"
-#include "parser.h"
-#include "analyzer.h"
-#include "generator.h"
+#include "program.h"
 #include "platform.h"
 
-static String read_file(const char* filename)
+#include <time.h>
+
+
+#define timer_start(name) clock_t name##_start = clock();
+#define timer_end(name) name = (float)(clock() - name##_start) / CLOCKS_PER_SEC;
+
+
+static void assemble(String assembly, const char* obj)
 {
-	String source_code = { 0 };
+	String obj_path = { .str = (char*)obj, strlen(obj) };
 
-	FILE* f = fopen(filename, "rb");
-	if (!f)
-	{
-		fprintf(stderr, "Could not open file '%s'.\n", filename);
-		return source_code;
-	}
-	fseek(f, 0, SEEK_END);
-	u64 file_size = ftell(f);
-	fseek(f, 0, SEEK_SET);
+	String obj_dir = path_get_parent(obj_path);
+	String obj_stem = path_get_stem(obj_path);
 
-	source_code.str = malloc(file_size + 1);
-	if (!source_code.str)
-	{
-		fprintf(stderr, "Could not allocate space for file '%s'.\n", filename);
-		return source_code;
-	}
+	create_directory(obj_dir);
 
-	source_code.len = file_size;
 
-	fread(source_code.str, file_size, 1, f);
-	source_code.str[file_size] = 0;
-	fclose(f);
+	char asm_path[128];
+	snprintf(asm_path, sizeof(asm_path), "%.*s/%.*s.asm", (i32)obj_dir.len, obj_dir.str, (i32)obj_stem.len, obj_stem.str);
 
-	return source_code;
-}
+	write_file(asm_path, assembly);
 
-static void write_file(const char* filename, String s)
-{
-	FILE* f = fopen(filename, "w");
-	if (!f)
-	{
-		fprintf(stderr, "Could not open file '%s'.\n", filename);
-		return;
-	}
 
-	fprintf(f, "%.*s", (i32)s.len, s.str);
 
-	fclose(f);
-}
+	char nasm_command[128] = "";
 
-static String path_get_parent(String path)
-{
-	while (--path.len)
-	{
-		if (path.str[path.len] == '/' || path.str[path.len] == '\\')
-		{
-			break;
-		}
-	}
-	if (path.len == 0)
-	{
-		path = (String){ .str = ".", .len = 1 };
-	}
-	return path;
-}
+#if defined(_WIN32)
+	snprintf(nasm_command, sizeof(nasm_command), ".\\nasm\\nasm.exe -f win64 -o %.*s %s", (i32)obj_path.len, obj_path.str, asm_path);
+#elif defined(__linux__)
 
-static String path_get_filename(String path)
-{
-	String parent = path_get_parent(path);
-	if (!string_equal(parent, string_from_cstr(".")))
-	{
-		path.str += parent.len + 1;
-		path.len -= parent.len + 1;
-	}
+#endif
 
-	return path;
-}
-
-static String path_get_stem(String path)
-{
-	String filename = path_get_filename(path);
-	
-	String copy = filename;
-	while (--copy.len)
-	{
-		if (copy.str[copy.len] == '.')
-		{
-			return copy;
-		}
-	}
-	return filename;
+	system(nasm_command);
 }
 
 i32 main(i32 argc, char** argv)
@@ -99,14 +44,15 @@ i32 main(i32 argc, char** argv)
 		exit(EXIT_FAILURE);
 	}
 
-	String obj_path = { .str = argv[2], strlen(argv[2]) };
-	String obj_dir = path_get_parent(obj_path);
-	String obj_stem = path_get_stem(obj_path);
+	
 
-	create_directory(obj_dir);
+	float lexer_time = 0.f;
+	float parser_time = 0.f;
+	float analyzer_time = 0.f;
+	float generator_time = 0.f;
+	float total_time = 0.f;
 
-	char asm_path[128];
-	snprintf(asm_path, sizeof(asm_path), "%.*s/%.*s.asm", (i32)obj_dir.len, obj_dir.str, (i32)obj_stem.len, obj_stem.str);
+	timer_start(total_time);
 
 
 	Program program = { 0 };
@@ -114,36 +60,48 @@ i32 main(i32 argc, char** argv)
 
 	if (program.source_code.len > 0)
 	{
+		timer_start(lexer_time);
 		TokenStream tokens = tokenize(program.source_code);
+		timer_end(lexer_time);
+
 		//print_tokens(&tokens);
 
-		if (parse(&program, tokens))
+
+		timer_start(parser_time);
+		b32 parse_result = parse(&program, tokens);
+		timer_end(parser_time);
+
+		if (parse_result)
 		{
-			if (analyze(&program))
+			timer_start(analyzer_time);
+			b32 analysis_result = analyze(&program);
+			timer_end(analyzer_time);
+
+			if (analysis_result)
 			{
-				print_ast(&program);
+				program_print_ast(&program);
 
-				String result = generate(program);
-				write_file(asm_path, result);
+				timer_start(generator_time);
+				String assembly = generate(program);
+				timer_end(generator_time);
 
-				string_free(&result);
+				assemble(assembly, argv[2]);
 
-
-				char nasm_command[128] = "";
-
-#if defined(_WIN32)
-				snprintf(nasm_command, sizeof(nasm_command), ".\\nasm\\nasm.exe -f win64 -o %.*s %s", (i32)obj_path.len, obj_path.str, asm_path);
-#elif defined(__linux__)
-
-#endif
-
-				system(nasm_command);
+				string_free(&assembly);
 			}
 		}
 
 		free_program(&program);
 		free_token_stream(&tokens);
 	}
+
+	timer_end(total_time);
+
+	printf("Lexer: %.3fs.\n", lexer_time);
+	printf("Parser: %.3fs.\n", parser_time);
+	printf("Analyzer: %.3fs.\n", analyzer_time);
+	printf("Generator: %.3fs.\n", generator_time);
+	printf("Finished after %.3f seconds.\n", total_time);
 
 	exit(EXIT_SUCCESS);
 }

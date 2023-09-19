@@ -1,4 +1,4 @@
-#include "generator.h"
+#include "program.h"
 
 #include <assert.h>
 

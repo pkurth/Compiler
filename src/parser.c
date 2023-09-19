@@ -1,5 +1,4 @@
-#include "parser.h"
-#include "error.h"
+#include "program.h"
 
 #include <assert.h>
 
@@ -138,7 +137,7 @@ static b32 context_expect(ParseContext* context, TokenType expected)
 			fprintf(stderr, "LINE %d: Expected '%s', got '%s'.\n", unexpected_token.source_location.line, token_type_to_string(expected), token_type_to_string(unexpected_token.type));
 		}
 
-		print_line_error(context->program->source_code, unexpected_token.source_location);
+		program_print_line_error(context->program, unexpected_token.source_location);
 	}
 	return result;
 }
@@ -265,7 +264,7 @@ static ExpressionHandle parse_atom(ParseContext* context)
 	{
 		fprintf(stderr, "LINE %d: Unexpected token '%s'.\n", token.source_location.line, token_type_to_string(token.type));
 
-		print_line_error(context->program->source_code, token.source_location);
+		program_print_line_error(context->program, token.source_location);
 	}
 
 	return 0;
@@ -366,7 +365,7 @@ static i32 parse_statement(ParseContext* context)
 			context_advance(context);
 
 			Token data_type_token = context_consume(context);
-			NumericDatatype data_type = token_to_numeric(data_type_token.type);
+			NumericDatatype data_type = token_type_to_numeric(data_type_token.type);
 
 			statement.type = StatementType_Declaration;
 			statement.declaration = (DeclarationStatement) { .data_type = data_type, .lhs = lhs };
@@ -389,7 +388,7 @@ static i32 parse_statement(ParseContext* context)
 			else
 			{
 				Token unexpected_token = context_peek(context);
-				print_line_error(context->program->source_code, unexpected_token.source_location);
+				program_print_line_error(context->program, unexpected_token.source_location);
 			}
 		}
 		else if (declaration_assignment_token == TokenType_ColonEqual)

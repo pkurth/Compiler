@@ -1,5 +1,4 @@
-#include "analyzer.h"
-#include "error.h"
+#include "program.h"
 
 #include <assert.h>
 
@@ -113,7 +112,7 @@ static b32 assert_no_variable_name_collision(Program* program, String identifier
 	if (var)
 	{
 		fprintf(stderr, "LINE %d: Identifier '%.*s' is already declared in line %d:\n", source_location.line, (i32)identifier.len, identifier.str, var->source_location.line);
-		print_line_error(program->source_code, var->source_location);
+		program_print_line_error(program, var->source_location);
 		return false;
 	}
 
@@ -187,7 +186,7 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 		if (!var)
 		{
 			fprintf(stderr, "LINE %d: Undeclared identifier '%.*s'.\n", lhs_expression->source_location.line, (i32)identifier.len, identifier.str);
-			print_line_error(program->source_code, lhs_expression->source_location);
+			program_print_line_error(program, lhs_expression->source_location);
 			return false;
 		}
 
@@ -246,7 +245,7 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 		if (!var)
 		{
 			fprintf(stderr, "LINE %d: Undeclared identifier '%.*s'.\n", expression->source_location.line, (i32)name.len, name.str);
-			print_line_error(program->source_code, expression->source_location);
+			program_print_line_error(program, expression->source_location);
 			return false;
 		}
 
@@ -282,14 +281,14 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 					if (!error_printed)
 					{
 						fprintf(stderr, "LINE %d: More than one function matches call:\n", expression->source_location.line);
-						print_line_error(program->source_code, expression->source_location);
+						program_print_line_error(program, expression->source_location);
 						fprintf(stderr, "Could be either:\n");
 						fprintf(stderr, "LINE %d: ", called_function->source_location.line);
-						print_line(program->source_code, called_function->source_location);
+						program_print_line(program, called_function->source_location, stderr);
 						error_printed = true;
 					}
 					fprintf(stderr, "LINE %d: ", function->source_location.line);
-					print_line(program->source_code, function->source_location);
+					program_print_line(program, function->source_location, stderr);
 				}
 				called_function = function;
 			}
@@ -297,7 +296,7 @@ static b32 analyze_expression(Program* program, ExpressionHandle expression_hand
 		if (!called_function)
 		{
 			fprintf(stderr, "LINE %d: No matching function found for call:\n", expression->source_location.line);
-			print_line_error(program->source_code, expression->source_location);
+			program_print_line_error(program, expression->source_location);
 			return false;
 		}
 		if (error_printed)

@@ -1,140 +1,49 @@
-#include "types.h"
+#include "program.h"
 
 #include <assert.h>
+#include <ctype.h>
 
 
-const char* serialize_numeric_literal(NumericLiteral data)
+String program_get_line(Program* program, i32 character_index)
 {
-	static char result[128];
-
-	switch (data.type)
+	i64 left = character_index;
+	while (left > 0 && program->source_code.str[left - 1] != '\n')
 	{
-		case NumericDatatype_B32:
-			snprintf(result, sizeof(result), data.data_b32 ? "1" : "0");
-			break;
-		case NumericDatatype_I32:
-			snprintf(result, sizeof(result), "%" PRIi32, data.data_i32);
-			break;
-		case NumericDatatype_U32:
-			snprintf(result, sizeof(result), "%" PRIu32, data.data_u32);
-			break;
-		case NumericDatatype_F32:
-			snprintf(result, sizeof(result), "%f", data.data_f32);
-			break;
+		--left;
+	}
+	while (isspace(program->source_code.str[left]))
+	{
+		++left;
 	}
 
+	i64 right = character_index;
+	while (right < program->source_code.len && program->source_code.str[right + 1] != '\n')
+	{
+		++right;
+	}
+
+	String result = { .str = program->source_code.str + left, .len = right - left };
 	return result;
 }
 
-const char* numeric_to_string(NumericDatatype type)
+i32 program_get_column(Program* program, SourceLocation source_location, String line)
 {
-	switch (type)
-	{
-		case NumericDatatype_B32:
-			return "b32";
-		case NumericDatatype_I32:
-			return "i32";
-		case NumericDatatype_U32:
-			return "u32";
-		case NumericDatatype_F32:
-			return "f32";
-	}
-	return "Unknown datatype";
+	return (i32)((program->source_code.str + source_location.global_character_index) - line.str);
 }
 
-
-static const char* token_strings[TokenType_Count] =
+void program_print_line(Program* program, SourceLocation source_location, const FILE* stream)
 {
-	[TokenType_Unknown]				= "UNKNOWN",
-	[TokenType_EOF]					= "EOF",
-	[TokenType_Function]			= "fn",
-	[TokenType_If]					= "if",
-	[TokenType_Else]				= "else",
-	[TokenType_While]				= "while",
-	[TokenType_For]					= "for",
-	[TokenType_Return]				= "return",
-	[TokenType_B32]					= "b32",
-	[TokenType_I32]					= "i32",
-	[TokenType_U32]					= "u32",
-	[TokenType_F32]					= "f32",
-	[TokenType_OpenParenthesis]		= "(",
-	[TokenType_CloseParenthesis]	= ")",
-	[TokenType_OpenBracket]			= "[",
-	[TokenType_CloseBracket]		= "]",
-	[TokenType_OpenBrace]			= "{",
-	[TokenType_CloseBrace]			= "}",
-	[TokenType_Semicolon]			= ";",
-	[TokenType_Period]				= ".",
-	[TokenType_Comma]				= ",",
-	[TokenType_Colon]				= ":",
-	[TokenType_ColonColon]			= "::",
-	[TokenType_ColonEqual]			= ":=",
-	[TokenType_Hashtag]				= "#",
-	[TokenType_Dollar]				= "$",
-	[TokenType_At]					= "@",
-	[TokenType_QuestionMark]		= "?",
-	[TokenType_Exclamation]			= "!",
-	[TokenType_ExclamationEqual]	= "!=",
-	[TokenType_Plus]				= "+",
-	[TokenType_PlusEqual]			= "+=",
-	[TokenType_Minus]				= "-",
-	[TokenType_MinusEqual]			= "-=",
-	[TokenType_Star]				= "*",
-	[TokenType_StarEqual]			= "*=",
-	[TokenType_ForwardSlash]		= "/",
-	[TokenType_ForwardSlashEqual]	= "/=",
-	[TokenType_Ampersand]			= "&",
-	[TokenType_AmpersandEqual]		= "&=",
-	[TokenType_Pipe]				= "|",
-	[TokenType_PipeEqual]			= "|=",
-	[TokenType_Hat]					= "^",
-	[TokenType_HatEqual]			= "^=",
-	[TokenType_Tilde]				= "~",
-	[TokenType_Percent]				= "%",
-	[TokenType_PercentEqual]		= "%=",
-	[TokenType_Equal]				= "=",
-	[TokenType_EqualEqual]			= "==",
-	[TokenType_Less]				= "<",
-	[TokenType_LessEqual]			= "<=",
-	[TokenType_LessLess]			= "<<",
-	[TokenType_LessLessEqual]		= "<<=",
-	[TokenType_Greater]				= ">",
-	[TokenType_GreaterEqual]		= ">=",
-	[TokenType_GreaterGreater]		= ">>",
-	[TokenType_GreaterGreaterEqual] = ">>=",
-	[TokenType_Arrow]				= "->",
-};
-
-const char* token_type_to_string(TokenType type)
-{
-	return token_strings[type];
+	String line = program_get_line(program, source_location.global_character_index);
+	fprintf(stderr, "%.*s\n", (i32)line.len, line.str);
 }
 
-NumericDatatype token_to_numeric(TokenType type)
+void program_print_line_error(Program* program, SourceLocation source_location)
 {
-	switch (type)
-	{
-		case TokenType_B32: return NumericDatatype_B32;
-		case TokenType_U32: return NumericDatatype_U32;
-		case TokenType_I32: return NumericDatatype_I32;
-		case TokenType_F32: return NumericDatatype_F32;
-		default:
-			assert(false);
-			return NumericDatatype_Unknown;
-	}
-}
+	String line = program_get_line(program, source_location.global_character_index);
+	i32 column = program_get_column(program, source_location, line);
 
-
-
-
-void free_program(Program* program)
-{
-	array_free(&program->functions);
-	array_free(&program->function_parameters);
-	array_free(&program->statements);
-	array_free(&program->expressions);
-
-	string_free(&program->source_code);
+	fprintf(stderr, "%.*s\n", (i32)line.len, line.str);
+	fprintf(stderr, "%*s^\n", column, "");
 }
 
 
@@ -369,7 +278,7 @@ static void print_function(Program* program, Function function)
 	printf("\n");
 }
 
-void print_ast(Program* program)
+void program_print_ast(Program* program)
 {
 	for (i64 i = 0; i < program->functions.count; ++i)
 	{
@@ -377,4 +286,13 @@ void print_ast(Program* program)
 	}
 }
 
+void free_program(Program* program)
+{
+	array_free(&program->functions);
+	array_free(&program->function_parameters);
+	array_free(&program->statements);
+	array_free(&program->expressions);
+
+	string_free(&program->source_code);
+}
 
